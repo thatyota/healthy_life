@@ -23,7 +23,7 @@ app.use(arcjetMiddleware);
 app.use("/api/users",userRoutes);
 app.use("/api/posts",postRoutes);
 app.use("/api/comments", commentRoutes);
-app.use("/api/notificattions", notificationRoutes)
+app.use("/api/notifications", notificationRoutes)
 
 //error handling middleware
 //error handling middleware
