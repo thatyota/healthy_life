@@ -42,16 +42,13 @@ export const syncUser = asyncHandler (async (req,res) => {
    const clerkUser = await clerkClient.users.getUser(userId);
 
      const userData = {
-
-        clerkId: userId,
-        email: clerkUser.emailAddresses[0].emailAddresses,
-        FirstName:clerkUser.FirstName || "",
-        LastName:clerkUser.LastName || "",
-        //se o user tem o email pedro@gmail.com o username vai ser pedro
-        Username:clerkUser.emailAddresses[0].emailAddresses.split("@")[0], 
-        ProfilePicture: clerkUser.imageUrl || "",
-
-     };
+    clerkId: userId,
+    email: clerkUser.emailAddresses[0].emailAddress,
+    FirstName: clerkUser.firstName || "",
+    LastName: clerkUser.lastName || "",
+    Username: clerkUser.emailAddresses[0].emailAddress.split("@")[0], 
+    ProfilePicture: clerkUser.imageUrl || "",
+};
 
      const user = await User.create(userData);
 
