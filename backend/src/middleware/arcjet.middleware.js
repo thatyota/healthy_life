@@ -5,7 +5,7 @@ import { aj } from "../config/arcjet.js";
 export const arcjetMiddleware = async (req, res, next) => {
     try {
        const decision = await aj.protect(req, {
-        request: 1, // each request consume 1 token
+        requested: 1, // each request consume 1 token
        });
 
        // handle denied requests

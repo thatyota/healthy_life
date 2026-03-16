@@ -2,7 +2,7 @@ import { useAuth, useClerk } from "@clerk/expo";
 import axios, { AxiosInstance, formToJSON} from "axios";
 
 
-const APi_BASE_URl = "https://healthy-life-sable.vercel.app/api"
+const APi_BASE_URl = "https://healthy-life-sable.vercel.app/"
 
 export const createApiClient =  (getToken: () => Promise<string |null> ) : AxiosInstance => {
 
@@ -28,6 +28,6 @@ export const userApi = {
     syncUser: (api:AxiosInstance) => api.post("/users/sync"),
     getCurrentUser: (api: AxiosInstance) => api.get("/users/me"),
     updateProfile: (api: AxiosInstance, data: any) => api.put("/users/profile", data),
-    
+
 
 }
