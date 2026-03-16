@@ -14,11 +14,12 @@ export const aj = arcjet({
         // Bot Detection: blocks malicious bots from accessing your API
         // "CATEGORY:SEARCH_ENGINE" allows legitimate bots like Google and Bing
         detectBot({
-            mode: "LIVE",
-            allow: [
-                "CATEGORY:SEARCH_ENGINE", // Allow search engine crawlers (Googlebot, Bingbot, etc.)
-            ],
-        }),
+    mode: "LIVE",
+    allow: [
+        "CATEGORY:SEARCH_ENGINE",
+        "CATEGORY:MOBILE", // permite apps mobile
+    ],
+}),
 
         // Rate Limiting: limits how many requests a user can make using a token bucket algorithm
         // Token bucket works like this: each IP gets a bucket that fills with tokens over time.
