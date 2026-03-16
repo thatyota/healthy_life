@@ -2,7 +2,7 @@ import { useAuth, useClerk } from "@clerk/expo";
 import axios, { AxiosInstance, formToJSON} from "axios";
 
 
-const APi_BASE_URl = "https://healthy-life-sable.vercel.app/"
+const APi_BASE_URl = "https://healthy-life-sable.vercel.app/api"
 
 export const createApiClient =  (getToken: () => Promise<string |null> ) : AxiosInstance => {
 
