@@ -14,7 +14,7 @@ export const aj = arcjet({
         // Bot Detection: blocks malicious bots from accessing your API
         // "CATEGORY:SEARCH_ENGINE" allows legitimate bots like Google and Bing
         detectBot({
-            mode: "LIVE",
+            mode: "DRY_RUN",
             allow: [
                 "CATEGORY:SEARCH_ENGINE", // Allow search engine crawlers (Googlebot, Bingbot, etc.)
             ],
