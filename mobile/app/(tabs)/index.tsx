@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import SignOutButton from '@/componets/SignOutButton'
+import SignOutButton from '@/components/SignOutButton'
 import { useUserSync } from '@/hooks/useUserSync'
 import { Ionicons } from '@expo/vector-icons'
 
