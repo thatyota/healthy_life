@@ -1,8 +1,9 @@
-import { Text, View } from 'react-native'
+import { ScrollView, ScrollViewComponent, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import SignOutButton from '@/components/SignOutButton'
 import { useUserSync } from '@/hooks/useUserSync'
 import { Ionicons } from '@expo/vector-icons'
+import PostComposer from '@/components/PostComposer'
 
 const HomeScreen = () => {
   useUserSync()
@@ -13,6 +14,13 @@ const HomeScreen = () => {
         <Text className='text-xl font-bold text-gray-900'>Home</Text>
           <SignOutButton/>
       </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className='flex-1'
+        contentContainerStyle={{paddingBottom:80}}
+      >
+        <PostComposer/>
+      </ScrollView>
     </SafeAreaView>
   );
 };
