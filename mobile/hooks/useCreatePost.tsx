@@ -45,8 +45,6 @@ export const useCreatePost = () => {
             Alert.alert("Sucess","Post created successfully!");
         },
         onError: (error: any) => {
-            console.log("Error status:", error?.response?.status);
-            console.log("Error data:", JSON.stringify(error?.response?.data));
             Alert.alert("Error", error?.response?.data?.error || "Failed to create post. Please try again.");
         },
     });

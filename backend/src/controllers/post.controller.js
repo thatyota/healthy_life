@@ -67,12 +67,9 @@ export const getUserPosts = asyncHandler(async (req, res) => {
 
 
 export const createPost = asyncHandler(async (req,res) => {
-    
     const {userId } = getAuth(req);
-     console.log("clerkId recebido:", userId); 
     const { content } = req.body;
     const imageFile = req.file;
-
 
 
     if (!content && !imageFile) {
@@ -80,9 +77,7 @@ export const createPost = asyncHandler(async (req,res) => {
     }
 
     const user = await User.findOne({ clerkId: userId});
-      console.log("userId do Clerk:", userId);
-    console.log("user encontrado:", user);
-    
+
     if(!user) return res.status(404).json({error: "User not found"});
 
 
