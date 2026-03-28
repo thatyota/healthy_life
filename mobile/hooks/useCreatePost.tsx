@@ -29,9 +29,9 @@ export const useCreatePost = () => {
                 
                 formData.append("image", {
                     uri: postData.imageUri,
-                    name: `image.${fileType} `,
+                    name: `image.${fileType}`,
                     type: mimeType,
-                }as any); 
+                } as any); 
             }
             
             return api.post("/posts", formData, {
@@ -44,62 +44,63 @@ export const useCreatePost = () => {
             queryClient.invalidateQueries({ queryKey: ["posts"]});
             Alert.alert("Sucess","Post created successfully!");
         },
-        onError: () => {
-            Alert.alert("Error", "Failed to create post. Please try again.");
+        onError: (error: any) => {
+            console.log("Error status:", error?.response?.status);
+            console.log("Error data:", JSON.stringify(error?.response?.data));
+            Alert.alert("Error", error?.response?.data?.error || "Failed to create post. Please try again.");
         },
     });
-        const handleImagePicker = async (useCamera: boolean = false) => {
-            const permissionResult = useCamera
+
+    const handleImagePicker = async (useCamera: boolean = false) => {
+        const permissionResult = useCamera
             ? await ImagePicker.requestCameraPermissionsAsync()
             : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-
-            if (permissionResult.status !== "granted") {
-                const source = useCamera ? "camera" : "photo library";
-                Alert.alert("Permission needed", `Please grant permission to acess your ${source}`);
-                return;
-
-            }
-            const pickerOptions = {
-                allowsEditing: true,
-                aspect: [16, 9] as [number, number],
-                quality: 0.8,
-            };
-//add here video function
-            const result = useCamera
-                ? await ImagePicker.launchCameraAsync(pickerOptions)
-                : await ImagePicker.launchImageLibraryAsync({
-                    ...pickerOptions,
-                    //put here video
-                    mediaTypes: ["images"],
-                });
-            if (!result.canceled) setSelectedImage(result.assets[0].uri);
-        };
-
-        const createPost = () => {
-            if (!content.trim() && !selectedImage) {
-                Alert.alert("Empty Post", "Please write something or add an image before posting!");
-                return;
-            }
-
-            const postData: { content: string; imageUri?: string} = {
-                content: content.trim(),
-            };
-
-            if (selectedImage) postData.imageUri = selectedImage;
-
-            createPostMutation.mutate(postData);
-        };
-
-        return {
-            content,
-            setContent,
-            selectedImage,
-            isCreating: createPostMutation.isPending,
-            pickImageFromGallery: () => handleImagePicker(false),
-            takePhoto: () => handleImagePicker(true),
-            removeImage: () => setSelectedImage(null),
-            createPost,
+        if (permissionResult.status !== "granted") {
+            const source = useCamera ? "camera" : "photo library";
+            Alert.alert("Permission needed", `Please grant permission to acess your ${source}`);
+            return;
         }
 
+        const pickerOptions = {
+            allowsEditing: true,
+            aspect: [16, 9] as [number, number],
+            quality: 0.8,
+        };
+
+        const result = useCamera
+            ? await ImagePicker.launchCameraAsync(pickerOptions)
+            : await ImagePicker.launchImageLibraryAsync({
+                ...pickerOptions,
+                mediaTypes: ["images"],
+            });
+
+        if (!result.canceled) setSelectedImage(result.assets[0].uri);
+    };
+
+    const createPost = () => {
+        if (!content.trim() && !selectedImage) {
+            Alert.alert("Empty Post", "Please write something or add an image before posting!");
+            return;
+        }
+
+        const postData: { content: string; imageUri?: string} = {
+            content: content.trim(),
+        };
+
+        if (selectedImage) postData.imageUri = selectedImage;
+
+        createPostMutation.mutate(postData);
+    };
+
+    return {
+        content,
+        setContent,
+        selectedImage,
+        isCreating: createPostMutation.isPending,
+        pickImageFromGallery: () => handleImagePicker(false),
+        takePhoto: () => handleImagePicker(true),
+        removeImage: () => setSelectedImage(null),
+        createPost,
+    };
 };
