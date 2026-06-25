@@ -5,12 +5,15 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
+import { useApiClient, postApi } from "@/utils/api";
+import { Post } from "@/hooks/usePosts";
 
 const API_URL = "https://healthy-life-sable.vercel.app/api";
 
@@ -18,13 +21,13 @@ export default function UserProfileScreen() {
   const { username } = useLocalSearchParams();
   const router = useRouter();
   const { userId, getToken } = useAuth();
+  const api = useApiClient();
   const [user, setUser] = useState<any>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
-
-  useEffect(() => {
-    fetchProfile();
-  }, [username]);
 
   const fetchProfile = async () => {
     try {
@@ -33,10 +36,36 @@ export default function UserProfileScreen() {
       setUser(data.user);
     } catch (error) {
       console.error(error);
-    } finally {
-      setLoading(false);
     }
   };
+
+  const fetchUserPosts = async () => {
+    setPostsLoading(true);
+    try {
+      const response = await postApi.getUserPosts(api, username as string);
+      setPosts(response.data.posts || []);
+    } catch (error: any) {
+      console.error("Erro ao buscar posts:", error.message);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const loadAll = async () => {
+    setLoading(true);
+    await Promise.all([fetchProfile(), fetchUserPosts()]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAll();
+  }, [username]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([fetchProfile(), fetchUserPosts()]);
+    setRefreshing(false);
+  }, []);
 
   const handleFollow = async () => {
     const token = await getToken();
@@ -74,6 +103,7 @@ export default function UserProfileScreen() {
   }
 
   const isOwnProfile = userId === user.clerkId;
+  const displayName = `${user.FirstName || ""} ${user.LastName || ""}`.trim() || user.Username;
 
   return (
     <SafeAreaView className="flex-1 bg-[#F1F8E9]">
@@ -83,16 +113,24 @@ export default function UserProfileScreen() {
           <Feather name="arrow-left" size={24} color="#3A6604" />
         </TouchableOpacity>
         <View>
-          <Text className="font-bold text-lg text-[#3A6604]">
-            {user.FirstName} {user.LastName}
-          </Text>
+          <Text className="font-bold text-lg text-[#3A6604]">{displayName}</Text>
           <Text className="text-[#486623] text-sm">
             {user.Followers?.length || 0} seguidores
           </Text>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#65B307"
+            colors={["#65B307"]}
+          />
+        }
+      >
         {/* Banner */}
         {user.bannerImage ? (
           <Image source={{ uri: user.bannerImage }} className="w-full h-32" />
@@ -159,6 +197,12 @@ export default function UserProfileScreen() {
           <View className="flex-row mt-4 gap-6">
             <View className="items-center">
               <Text className="font-bold text-[#3A6604] text-lg">
+                {posts.length}
+              </Text>
+              <Text className="text-[#486623] text-sm">Receitas</Text>
+            </View>
+            <View className="items-center">
+              <Text className="font-bold text-[#3A6604] text-lg">
                 {user.Followers?.length || 0}
               </Text>
               <Text className="text-[#486623] text-sm">Seguidores</Text>
@@ -177,15 +221,92 @@ export default function UserProfileScreen() {
         <View className="flex-row items-center px-4 py-3">
           <Ionicons name="restaurant-outline" size={18} color="#3A6604" />
           <Text className="text-[#3A6604] font-bold text-lg ml-2">
-            Receitas
+            Receitas de {user.FirstName || user.Username}
           </Text>
         </View>
-        <View className="pb-10 px-6">
-          <Text className="text-[#486623] text-center">
-            As receitas deste chef aparecem aqui
-          </Text>
-        </View>
+
+        {postsLoading ? (
+          <View className="py-10 justify-center items-center">
+            <ActivityIndicator size="large" color="#65B307" />
+          </View>
+        ) : posts && posts.length > 0 ? (
+          posts.map((post) => (
+            <TouchableOpacity
+              key={post._id}
+              onPress={() => router.push(`/post/${post._id}` as any)}
+              activeOpacity={0.9}
+              className="bg-white mx-3 mb-3 rounded-2xl shadow-sm border border-[#E8F5E9] overflow-hidden"
+            >
+              {/* Post Header */}
+              <View className="flex-row items-center px-4 pt-3 pb-2">
+                <Text className="text-[#486623] text-[13px]">
+                  {post.createdAt ? formatDate(post.createdAt) : ""}
+                </Text>
+              </View>
+
+              {/* Content */}
+              {post.Content ? (
+                <View className="px-4 pb-2">
+                  <Text className="text-[#1a1a1a] text-[15px] leading-[22px]" numberOfLines={3}>
+                    {post.Content}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Image */}
+              {post.Image ? (
+                <View className="px-4 pb-3">
+                  <Image
+                    source={{ uri: post.Image }}
+                    className="w-full aspect-[4/3] rounded-xl"
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+
+              {/* Stats */}
+              <View className="flex-row items-center px-4 pb-3 gap-4">
+                <View className="flex-row items-center gap-1">
+                  <Ionicons name="heart" size={16} color="#65B307" />
+                  <Text className="text-[#486623] text-[13px]">
+                    {post.Likes?.length || 0} curtidas
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-1">
+                  <Ionicons name="chatbubble-outline" size={16} color="#486623" />
+                  <Text className="text-[#486623] text-[13px]">
+                    {post.comments?.length || 0} comentários
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View className="py-20 justify-center items-center px-6">
+            <View className="w-20 h-20 rounded-full bg-[#E8F5E9] justify-center items-center mb-4">
+              <Ionicons name="restaurant-outline" size={40} color="#65B307" />
+            </View>
+            <Text className="text-[#3A6604] font-bold text-lg text-center">
+              Ainda não há receitas
+            </Text>
+            <Text className="text-[#486623] text-base mt-2 text-center">
+              Este chef ainda não partilhou nenhuma receita.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diff < 60) return "agora";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d`;
+  return date.toLocaleDateString("pt-PT");
 }

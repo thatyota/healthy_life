@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-
-const API_URL = "https://healthy-life-sable.vercel.app/api";
+import { useApiClient } from "@/utils/api";
 
 interface UserResult {
   _id: string;
@@ -18,35 +17,35 @@ export function useSearchUsers() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const api = useApiClient(); // ← Usa axios com token
 
-  const searchUsers = useCallback(async (searchQuery: string) => {
-    if (searchQuery.trim().length < 1) {
-      setResults([]);
-      setHasSearched(false);
-      return;
-    }
-
-    setLoading(true);
-    setHasSearched(true);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/users/search?q=${encodeURIComponent(searchQuery)}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+  const searchUsers = useCallback(
+    async (searchQuery: string) => {
+      if (searchQuery.trim().length < 1) {
+        setResults([]);
+        setHasSearched(false);
+        return;
       }
 
-      const data = await response.json();
-      setResults(data.users || []);
-    } catch (error) {
-      console.error("Search error:", error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      setLoading(true);
+      setHasSearched(true);
+
+      try {
+        console.log("🔍 Pesquisando:", searchQuery);
+        const response = await api.get(`/users/search?q=${encodeURIComponent(searchQuery)}`);
+        console.log("✅ Resultados:", response.data.users?.length || 0);
+        setResults(response.data.users || []);
+      } catch (error: any) {
+        console.error("❌ Search error:", error.message);
+        console.error("   Status:", error.response?.status);
+        console.error("   Data:", error.response?.data);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api]
+  );
 
   const handleSearch = useCallback(
     (text: string) => {
