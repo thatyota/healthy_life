@@ -1,24 +1,17 @@
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
   TextInput,
   FlatList,
   ActivityIndicator,
-} from 'react-native';
-import React from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { useSearchUsers } from '@/hooks/useSearchUsers';
-import UserSearchResult from '@/components/UserSearchResult';
-
-const TRENDING_TOPICS = [
-  { topic: "#HealthyEating", tweets: "234k" },
-  { topic: "#MealPrep", tweets: "189k" },
-  { topic: "#PlantBased", tweets: "567k" },
-  { topic: "#CleanEating", tweets: "98k" },
-  { topic: "#NutritionTips", tweets: "125k" },
-];
+  Keyboard,
+} from "react-native";
+import React, { useState } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import { useSearchUsers } from "@/hooks/useSearchUsers";
+import UserSearchResult from "@/components/UserSearchResult";
 
 export default function SearchScreen() {
   const {
@@ -31,6 +24,7 @@ export default function SearchScreen() {
     setQuery,
   } = useSearchUsers();
 
+  // Estado de pesquisa ativa
   if (hasSearched || query.length > 0) {
     return (
       <SafeAreaView className="flex-1 bg-[#F1F8E9]">
@@ -50,10 +44,12 @@ export default function SearchScreen() {
               onChangeText={handleSearch}
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
+              autoFocus={true}  // ← Teclado abre automaticamente
+              keyboardType="default"
+              returnKeyType="search"
             />
             {query.length > 0 && (
-              <TouchableOpacity onPress={() => handleSearch('')}>
+              <TouchableOpacity onPress={() => handleSearch("")}>
                 <View className="w-4 h-4 rounded-full bg-[#486623] justify-center items-center">
                   <Feather name="x" size={10} color="white" />
                 </View>
@@ -82,7 +78,8 @@ export default function SearchScreen() {
             keyExtractor={(item) => item._id}
             renderItem={({ item }) => <UserSearchResult user={item} />}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="handled"  // ← Permite clicar nos resultados com teclado aberto
+            keyboardDismissMode="on-drag"  // ← Fecha teclado ao fazer scroll
             ItemSeparatorComponent={() => (
               <View className="h-[0.5px] bg-[#C8E6C9] ml-[72px]" />
             )}
@@ -92,11 +89,15 @@ export default function SearchScreen() {
     );
   }
 
+  // Estado inicial
   return (
     <SafeAreaView className="flex-1 bg-[#F1F8E9]">
       <View className="px-4 py-2 bg-white border-b border-[#C8E6C9]">
         <TouchableOpacity
-          onPress={() => handleSearch('')}
+          onPress={() => {
+            setQuery("");
+            handleSearch("a"); // ← Ativa o estado de pesquisa
+          }}
           className="flex-row items-center bg-[#E8F5E9] rounded-full px-3 py-2.5"
         >
           <Feather name="search" size={16} color="#65B307" />

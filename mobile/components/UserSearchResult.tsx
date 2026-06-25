@@ -18,9 +18,14 @@ export default function UserSearchResult({ user }: Props) {
   const router = useRouter();
   const displayName = `${user.FirstName} ${user.LastName}`.trim() || user.Username;
 
+  const goToProfile = () => {
+    router.push(`/profile/${user.Username}` as any);
+  };
+
   return (
     <TouchableOpacity
-      onPress={() => router.push(`/profile/${user.Username}` as any)}
+      onPress={goToProfile}
+      activeOpacity={0.7}
       className="flex-row items-center px-4 py-3 active:bg-[#E8F5E9]"
     >
       {user.ProfilePicture ? (
@@ -39,6 +44,11 @@ export default function UserSearchResult({ user }: Props) {
       <View className="flex-1 ml-3">
         <Text className="text-[#3A6604] font-semibold text-[15px]">{displayName}</Text>
         <Text className="text-[#486623] text-[14px] mt-[1px]">@{user.Username}</Text>
+        {user.bio ? (
+          <Text className="text-[#8E8E8E] text-[13px] mt-[2px]" numberOfLines={1}>
+            {user.bio}
+          </Text>
+        ) : null}
         {user.Followers && user.Followers.length > 0 ? (
           <Text className="text-[#65B307] text-[13px] mt-[2px]">
             {user.Followers.length.toLocaleString()} seguidores
