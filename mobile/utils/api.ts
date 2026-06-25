@@ -1,4 +1,4 @@
-import { useAuth, useClerk } from "@clerk/expo";
+import { useAuth } from "@clerk/expo";
 import axios, { AxiosInstance } from "axios";
 
 const API_BASE_URL = "https://healthy-life-sable.vercel.app/api";
@@ -27,7 +27,6 @@ export const userApi = {
   updateProfile: (api: AxiosInstance, data: any) => api.put("/users/profile", data),
 };
 
-// ===== NOVO: Posts API =====
 export const postApi = {
   getPosts: (api: AxiosInstance) => api.get("/posts"),
   getPost: (api: AxiosInstance, postId: string) => api.get(`/posts/${postId}`),

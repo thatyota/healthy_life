@@ -8,7 +8,6 @@ interface Props {
   post: Post;
 }
 
-// Função simples para formatar tempo relativo
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -46,8 +45,8 @@ export default function PostCard({ post }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Eliminar post',
-      'Tens a certeza que queres eliminar este post?',
+      'Eliminar receita',
+      'Tens a certeza que queres eliminar esta receita?',
       [
         { text: 'Cancelar', style: 'cancel' },
         { 
@@ -62,9 +61,9 @@ export default function PostCard({ post }: Props) {
   const timeAgo = post.createdAt ? formatTimeAgo(post.createdAt) : '';
 
   return (
-    <View className="border-b border-[#262626]">
+    <View className="bg-white mx-3 mb-3 rounded-2xl shadow-sm border border-[#E8F5E9] overflow-hidden">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-3 pb-2">
+      <View className="flex-row items-center px-4 pt-4 pb-2">
         <TouchableOpacity 
           onPress={() => router.push(`/profile/${post.user?.Username}` as any)}
           className="flex-row items-center flex-1"
@@ -72,41 +71,40 @@ export default function PostCard({ post }: Props) {
           {post.user?.ProfilePicture ? (
             <Image 
               source={{ uri: post.user.ProfilePicture }} 
-              className="w-9 h-9 rounded-full"
+              className="w-10 h-10 rounded-full border-2 border-[#83E509]"
             />
           ) : (
-            <View className="w-9 h-9 rounded-full bg-[#333] justify-center items-center">
+            <View className="w-10 h-10 rounded-full bg-[#3A6604] justify-center items-center border-2 border-[#83E509]">
               <Text className="text-white font-bold text-sm">
                 {post.user?.Username?.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <View className="ml-3 flex-1">
-            <Text className="text-white font-semibold text-[15px]">
+            <Text className="text-[#3A6604] font-bold text-[15px]">
               {displayName}
             </Text>
-            <Text className="text-[#8E8E8E] text-[13px]">
+            <Text className="text-[#486623] text-[13px]">
               @{post.user?.Username} · {timeAgo}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* Delete button (só se for o autor) */}
         {post.user?._id === userId && (
-          <TouchableOpacity onPress={handleDelete}>
-            <Feather name="more-horizontal" size={20} color="#8E8E8E" />
+          <TouchableOpacity onPress={handleDelete} className="p-1">
+            <Feather name="more-horizontal" size={20} color="#486623" />
           </TouchableOpacity>
         )}
       </View>
 
       {/* Content */}
-      <View className="px-4 pb-2">
-        {post.Content ? (
-          <Text className="text-white text-[15px] leading-[22px]">
+      {post.Content ? (
+        <View className="px-4 pb-2">
+          <Text className="text-[#1a1a1a] text-[15px] leading-[22px]">
             {post.Content}
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       {/* Image */}
       {post.Image ? (
@@ -120,7 +118,7 @@ export default function PostCard({ post }: Props) {
       ) : null}
 
       {/* Actions */}
-      <View className="flex-row items-center px-4 pb-3 gap-6">
+      <View className="flex-row items-center px-4 pb-4 gap-6">
         {/* Like */}
         <TouchableOpacity 
           onPress={handleLike}
@@ -129,10 +127,10 @@ export default function PostCard({ post }: Props) {
           <Ionicons 
             name={isLiked ? "heart" : "heart-outline"} 
             size={22} 
-            color={isLiked ? "#ED4956" : "#8E8E8E"} 
+            color={isLiked ? "#65B307" : "#486623"} 
           />
           {likeCount > 0 && (
-            <Text className={`text-[13px] ${isLiked ? 'text-[#ED4956]' : 'text-[#8E8E8E]'}`}>
+            <Text className={`text-[13px] font-semibold ${isLiked ? 'text-[#65B307]' : 'text-[#486623]'}`}>
               {likeCount}
             </Text>
           )}
@@ -140,15 +138,20 @@ export default function PostCard({ post }: Props) {
 
         {/* Comment */}
         <TouchableOpacity className="flex-row items-center gap-1.5">
-          <Ionicons name="chatbubble-outline" size={20} color="#8E8E8E" />
+          <Ionicons name="chatbubble-outline" size={20} color="#486623" />
           {commentCount > 0 && (
-            <Text className="text-[#8E8E8E] text-[13px]">{commentCount}</Text>
+            <Text className="text-[#486623] text-[13px] font-semibold">{commentCount}</Text>
           )}
         </TouchableOpacity>
 
         {/* Share */}
         <TouchableOpacity>
-          <Feather name="send" size={20} color="#8E8E8E" />
+          <Feather name="send" size={20} color="#486623" />
+        </TouchableOpacity>
+
+        {/* Save */}
+        <TouchableOpacity className="ml-auto">
+          <Ionicons name="bookmark-outline" size={20} color="#486623" />
         </TouchableOpacity>
       </View>
     </View>
