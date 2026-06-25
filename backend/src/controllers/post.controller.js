@@ -9,19 +9,7 @@ import Comment from "../models/comment.model.js";
 export const getPosts = asyncHandler(async (req, res) => {
   const posts = await Post.find()
     .sort({ createdAt: -1 })
-    .populate({
-      path: "User",
-      model: "User",
-      select: "Username FirstName LastName ProfilePicture",
-    })
-    .populate({
-      path: "comments",
-      populate: {
-        path: "User",
-        model: "User",
-        select: "Username FirstName LastName ProfilePicture",
-      },
-    });
+    .populate("User", "Username FirstName LastName ProfilePicture");
 
   res.status(200).json({ posts });
 });
@@ -30,19 +18,7 @@ export const getPost = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
   const post = await Post.findById(postId)
-    .populate({
-      path: "User",
-      model: "User",
-      select: "Username FirstName LastName ProfilePicture",
-    })
-    .populate({
-      path: "comments",
-      populate: {
-        path: "User",
-        model: "User",
-        select: "Username FirstName LastName ProfilePicture",
-      },
-    });
+    .populate("User", "Username FirstName LastName ProfilePicture");
 
   if (!post) return res.status(404).json({ error: "Post not found" });
 
@@ -57,19 +33,7 @@ export const getUserPosts = asyncHandler(async (req, res) => {
 
   const posts = await Post.find({ User: user._id })
     .sort({ createdAt: -1 })
-    .populate({
-      path: "User",
-      model: "User",
-      select: "Username FirstName LastName ProfilePicture",
-    })
-    .populate({
-      path: "comments",
-      populate: {
-        path: "User",
-        model: "User",
-        select: "Username FirstName LastName ProfilePicture",
-      },
-    });
+    .populate("User", "Username FirstName LastName ProfilePicture");
 
   res.status(200).json({ posts });
 });
