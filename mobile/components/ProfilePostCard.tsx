@@ -1,7 +1,6 @@
 import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useDeletePost, Post } from "@/hooks/usePosts";
-import { useRouter } from "expo-router";
 
 interface Props {
   post: Post;
@@ -28,7 +27,6 @@ function formatTimeAgo(dateString: string): string {
 }
 
 export default function ProfilePostCard({ post, isOwnProfile }: Props) {
-  const router = useRouter();
   const deleteMutation = useDeletePost();
 
   const handleDelete = () => {

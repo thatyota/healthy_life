@@ -23,8 +23,17 @@ export const useCurrentUser = () => {
   return useQuery({
     queryKey: ["currentUser"],
     queryFn: async () => {
-      const response = await userApi.getCurrentUser(api);
-      return response.data.user as CurrentUser;
+      try {
+        console.log("🔍 A buscar current user...");
+        const response = await userApi.getCurrentUser(api);
+        console.log("✅ Current user:", response.data);
+        return response.data.user as CurrentUser;
+      } catch (error: any) {
+        console.error("❌ Erro ao buscar current user:", error.message);
+        console.error("   Status:", error.response?.status);
+        console.error("   Data:", error.response?.data);
+        throw error;
+      }
     },
   });
 };

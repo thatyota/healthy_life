@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useApiClient, postApi } from "@/utils/api";
 import { Post } from "./usePosts";
 
@@ -8,8 +8,15 @@ export const useUserPosts = (username: string) => {
   return useQuery({
     queryKey: ["userPosts", username],
     queryFn: async () => {
-      const response = await postApi.getUserPosts(api, username);
-      return response.data.posts as Post[];
+      try {
+        console.log(`🔍 A buscar posts do user: ${username}`);
+        const response = await postApi.getUserPosts(api, username);
+        console.log("✅ Posts do user:", response.data.posts?.length || 0);
+        return response.data.posts as Post[];
+      } catch (error: any) {
+        console.error("❌ Erro ao buscar posts do user:", error.message);
+        throw error;
+      }
     },
     enabled: !!username,
   });

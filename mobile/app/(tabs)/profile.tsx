@@ -19,7 +19,7 @@ import EditProfileModal from "@/components/EditProfileModal";
 
 export default function ProfileScreen() {
   const { userId } = useAuth();
-  const { data: user, isLoading: userLoading, refetch: refetchUser } = useCurrentUser();
+  const { data: user, isLoading: userLoading, error: userError, refetch: refetchUser } = useCurrentUser();
   const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useUserPosts(user?.Username || "");
   const { handleSignOut } = useSignOut();
   const [refreshing, setRefreshing] = useState(false);
@@ -31,18 +31,31 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, [refetchUser, refetchPosts]);
 
-  if (userLoading && !user) {
+  if (userLoading) {
     return (
       <SafeAreaView className="flex-1 bg-[#F1F8E9] justify-center items-center">
         <ActivityIndicator size="large" color="#65B307" />
+        <Text className="text-[#486623] mt-3">A carregar perfil...</Text>
       </SafeAreaView>
     );
   }
 
-  if (!user) {
+  if (userError || !user) {
     return (
-      <SafeAreaView className="flex-1 bg-[#F1F8E9] justify-center items-center">
-        <Text className="text-[#486623]">Erro ao carregar perfil</Text>
+      <SafeAreaView className="flex-1 bg-[#F1F8E9] justify-center items-center px-6">
+        <View className="w-16 h-16 rounded-full bg-[#FFEBEE] justify-center items-center mb-4">
+          <Ionicons name="warning-outline" size={32} color="#C62828" />
+        </View>
+        <Text className="text-[#C62828] font-bold text-lg">Erro ao carregar perfil</Text>
+        <Text className="text-[#486623] text-sm text-center mt-2">
+          {userError?.message || "Não foi possível carregar os dados do perfil"}
+        </Text>
+        <TouchableOpacity 
+          onPress={() => refetchUser()}
+          className="mt-4 px-6 py-2 bg-[#65B307] rounded-full"
+        >
+          <Text className="text-white font-bold">Tentar novamente</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }

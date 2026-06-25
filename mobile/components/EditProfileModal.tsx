@@ -8,6 +8,7 @@ import {
   Image,
   ScrollView,
   Alert,
+  SafeAreaView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { CurrentUser, useUpdateProfile } from "@/hooks/useCurrentUser";
@@ -174,5 +175,3 @@ export default function EditProfileModal({ visible, onClose, user }: Props) {
     </Modal>
   );
 }
-
-import { SafeAreaView } from "react-native-safe-area-context";
