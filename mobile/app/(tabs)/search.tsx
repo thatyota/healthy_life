@@ -1,6 +1,5 @@
 import { 
   View, 
-  ScrollView, 
   Text, 
   TouchableOpacity, 
   TextInput,
@@ -9,7 +8,7 @@ import {
 } from 'react-native';
 import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSearchUsers } from '@/hooks/useSearchUsers';
 import UserSearchResult from '@/components/UserSearchResult';
 
@@ -32,18 +31,21 @@ export default function SearchScreen() {
     setQuery,
   } = useSearchUsers();
 
-  // Estado de pesquisa ativa
   if (hasSearched || query.length > 0) {
     return (
-      <SafeAreaView className="flex-1 bg-white">
-        {/* Search Bar */}
-        <View className="px-4 py-3 border-b border-gray-100">
-          <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
-            <Feather name="search" size={20} color="#657786" />
+      <SafeAreaView className="flex-1 bg-[#F1F8E9]">
+        {/* Header */}
+        <View className="flex-row items-center px-3 py-2 gap-2 bg-white border-b border-[#C8E6C9]">
+          <TouchableOpacity onPress={clearSearch}>
+            <Feather name="arrow-left" size={24} color="#3A6604" />
+          </TouchableOpacity>
+
+          <View className="flex-1 flex-row items-center bg-[#E8F5E9] rounded-full px-3 py-2">
+            <Feather name="search" size={16} color="#65B307" />
             <TextInput
-              placeholder="Pesquisar users..."
-              className="flex-1 ml-3 text-base"
-              placeholderTextColor="#657786"
+              placeholder="Pesquisar chefs..."
+              placeholderTextColor="#486623"
+              className="flex-1 ml-2 text-[#3A6604] text-[15px]"
               value={query}
               onChangeText={handleSearch}
               autoCapitalize="none"
@@ -51,23 +53,27 @@ export default function SearchScreen() {
               autoFocus
             />
             {query.length > 0 && (
-              <TouchableOpacity onPress={clearSearch}>
-                <Feather name="x" size={20} color="#657786" />
+              <TouchableOpacity onPress={() => handleSearch('')}>
+                <View className="w-4 h-4 rounded-full bg-[#486623] justify-center items-center">
+                  <Feather name="x" size={10} color="white" />
+                </View>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Resultados */}
+        {/* Results */}
         {loading ? (
           <View className="flex-1 justify-center items-center">
-            <ActivityIndicator size="large" color="#1DA1F2" />
+            <ActivityIndicator size="large" color="#65B307" />
           </View>
         ) : results.length === 0 ? (
           <View className="flex-1 justify-center items-center px-6">
-            <Feather name="search" size={48} color="#CBD5E1" />
-            <Text className="text-gray-400 text-base mt-4 text-center">
-              Nenhum user encontrado para "{query}"
+            <View className="w-16 h-16 rounded-full bg-[#E8F5E9] justify-center items-center mb-4">
+              <Feather name="search" size={32} color="#65B307" />
+            </View>
+            <Text className="text-[#486623] text-base text-center">
+              Nenhum chef encontrado para "{query}"
             </Text>
           </View>
         ) : (
@@ -77,55 +83,36 @@ export default function SearchScreen() {
             renderItem={({ item }) => <UserSearchResult user={item} />}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            ItemSeparatorComponent={() => (
+              <View className="h-[0.5px] bg-[#C8E6C9] ml-[72px]" />
+            )}
           />
         )}
       </SafeAreaView>
     );
   }
 
-  // Estado inicial — Trending
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <View className="px-4 py-3 border-b border-gray-100">
-        <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
-          <Feather name="search" size={20} color="#657786" />
-          <TextInput
-            placeholder="Search"
-            className="flex-1 ml-3 text-base"
-            placeholderTextColor="#657786"
-            value={query}
-            onChangeText={handleSearch}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
+    <SafeAreaView className="flex-1 bg-[#F1F8E9]">
+      <View className="px-4 py-2 bg-white border-b border-[#C8E6C9]">
+        <TouchableOpacity
+          onPress={() => handleSearch('')}
+          className="flex-row items-center bg-[#E8F5E9] rounded-full px-3 py-2.5"
+        >
+          <Feather name="search" size={16} color="#65B307" />
+          <Text className="ml-2 text-[#486623] text-[15px]">Pesquisar chefs, receitas...</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1">
-        <View className="p-4">
-          <Text className="text-xl font-bold text-gray-900 mb-4">
-            Trending for you
-          </Text>
-          {TRENDING_TOPICS.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              className="py-3 border-b border-gray-100"
-              onPress={() => {
-                setQuery(item.topic);
-                handleSearch(item.topic);
-              }}
-            >
-              <Text className="text-gray-500 text-sm">
-                Trending in Health & Food
-              </Text>
-              <Text className="font-bold text-gray-900 text-lg">
-                {item.topic}
-              </Text>
-              <Text className="text-gray-500 text-sm">{item.tweets} Tweets</Text>
-            </TouchableOpacity>
-          ))}
+      <View className="flex-1 justify-center items-center">
+        <View className="w-20 h-20 rounded-full bg-[#E8F5E9] justify-center items-center mb-4">
+          <Ionicons name="search" size={40} color="#65B307" />
         </View>
-      </ScrollView>
+        <Text className="text-[#3A6604] font-bold text-lg">Descobre novos chefs</Text>
+        <Text className="text-[#486623] text-base mt-2 text-center px-6">
+          Pesquisa por utilizadores e encontra receitas saudáveis
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }

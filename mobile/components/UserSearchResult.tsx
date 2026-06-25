@@ -16,46 +16,41 @@ interface Props {
 
 export default function UserSearchResult({ user }: Props) {
   const router = useRouter();
+  const displayName = `${user.FirstName} ${user.LastName}`.trim() || user.Username;
 
   return (
     <TouchableOpacity
       onPress={() => router.push(`/profile/${user.Username}` as any)}
-      className="flex-row items-center py-3 px-4 border-b border-gray-100 active:bg-gray-50"
+      className="flex-row items-center px-4 py-3 active:bg-[#E8F5E9]"
     >
-      {/* Avatar */}
       {user.ProfilePicture ? (
         <Image
           source={{ uri: user.ProfilePicture }}
-          className="w-12 h-12 rounded-full"
+          className="w-[52px] h-[52px] rounded-full border-2 border-[#83E509]"
         />
       ) : (
-        <View className="w-12 h-12 rounded-full bg-gray-300 justify-center items-center">
-          <Text className="text-white text-lg font-bold">
+        <View className="w-[52px] h-[52px] rounded-full bg-[#3A6604] justify-center items-center border-2 border-[#83E509]">
+          <Text className="text-white text-xl font-semibold">
             {user.Username?.charAt(0).toUpperCase()}
           </Text>
         </View>
       )}
 
-      {/* Info */}
       <View className="flex-1 ml-3">
-        <Text className="font-bold text-gray-900 text-base">
-          {user.FirstName} {user.LastName}
+        <Text className="text-[#3A6604] font-semibold text-[15px]">
+          {displayName}
         </Text>
-        <Text className="text-gray-500 text-sm">@{user.Username}</Text>
-        {user.bio ? (
-          <Text className="text-gray-500 text-sm mt-0.5" numberOfLines={1}>
-            {user.bio}
+        <Text className="text-[#486623] text-[14px] mt-[1px]">
+          @{user.Username}
+        </Text>
+        {user.Followers && user.Followers.length > 0 ? (
+          <Text className="text-[#65B307] text-[13px] mt-[2px]">
+            {user.Followers.length.toLocaleString()} seguidores
           </Text>
         ) : null}
       </View>
 
-      {/* Followers count */}
-      <View className="items-end">
-        <Text className="text-gray-500 text-xs">
-          {user.Followers?.length || 0} seguidores
-        </Text>
-        <Feather name="chevron-right" size={18} color="#9CA3AF" />
-      </View>
+      <Feather name="chevron-right" size={20} color="#65B307" />
     </TouchableOpacity>
   );
 }

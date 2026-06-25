@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// ===== URL DA VERCEL =====
 const API_URL = 'https://healthy-life-sable.vercel.app/api';
 
 interface UserResult {

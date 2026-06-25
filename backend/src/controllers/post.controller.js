@@ -26,43 +26,42 @@ export const getPosts = asyncHandler (async (req, res) => {
 });
 
 
-export const getPost = asyncHandler (async (req,res) => {
-   const {postId} =req.params;
+export const getPost = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
 
-    const post = await Post.findById(postId)
-    populate("user", "UserName FisrtName LastName ProfilePicture")
-    populate({
-        path: "comments",
-        populate:{
-            path: "user",
-            select: "UserName FisrtName LastName ProfilePicture",
-        },
+  const post = await Post.findById(postId)
+    .populate("user", "Username FirstName LastName ProfilePicture")
+    .populate({
+      path: "comments",
+      populate: {
+        path: "user",
+        select: "Username FirstName LastName ProfilePicture",
+      },
     });
 
-    if (!post) return res.status(404).json({ error: "Post not found"})
+  if (!post) return res.status(404).json({ error: "Post not found" });
 
-    rest.status(200).json({ post });
+  res.status(200).json({ post });
 });
 
-
 export const getUserPosts = asyncHandler(async (req, res) => {
-    const { username } = req.params;
+  const { username } = req.params;
 
-    const user = await User.findOne({ user: user._Id });
-    if (!user) return res.status(404).json({ error: "User not found"});
+  const user = await User.findOne({ Username: username });
+  if (!user) return res.status(404).json({ error: "User not found" });
 
-    const post = await Post.find({ user: user._Id})
-        sort({ createdAt: -1})
-        populate("user", "UserName FirstName LastName ProfilePicture")
-        populate({
-            path:"comments",
-            populate: {
-                path:"user",
-                select: "UserName FirstName LastName ProfilePicture",
-            },
-        });
+  const posts = await Post.find({ User: user._id })
+    .sort({ createdAt: -1 })
+    .populate("user", "Username FirstName LastName ProfilePicture")
+    .populate({
+      path: "comments",
+      populate: {
+        path: "user",
+        select: "Username FirstName LastName ProfilePicture",
+      },
+    });
 
-
+  res.status(200).json({ posts });
 });
 
 
