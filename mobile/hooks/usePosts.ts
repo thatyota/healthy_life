@@ -1,19 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useApiClient, postApi } from "@/utils/api";
 
+export interface PostUser {
+  _id: string;
+  Username: string;
+  FirstName: string;
+  LastName: string;
+  ProfilePicture: string;
+}
+
 export interface Post {
   _id: string;
   Content: string;
   Image: string;
   Likes: string[];
-  Comments: string[];
-  user: {
-    _id: string;
-    Username: string;
-    FirstName: string;
-    LastName: string;
-    ProfilePicture: string;
-  };
+  comments: string[];
+  User: PostUser;        // Mongoose retorna User (maiúsculo)
+  user?: PostUser;       // Fallback para minúsculo
   createdAt: string;
   updatedAt: string;
 }

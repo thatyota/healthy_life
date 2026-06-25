@@ -33,13 +33,19 @@ export default function PostCard({ post }: Props) {
   const likeMutation = useLikePost();
   const deleteMutation = useDeletePost();
 
+  // Verifica se o user existe, senão usa fallback
+  const postUser = post.User || post.user;
   const isLiked = post.Likes?.includes(userId || "");
   const likeCount = post.Likes?.length || 0;
-  const commentCount = post.Comments?.length || 0;
+  const commentCount = post.comments?.length || 0;
 
   const displayName =
-    `${post.user?.FirstName || ""} ${post.user?.LastName || ""}`.trim() ||
-    post.user?.Username;
+    `${postUser?.FirstName || ""} ${postUser?.LastName || ""}`.trim() ||
+    postUser?.Username ||
+    "Utilizador";
+
+  const username = postUser?.Username || "user";
+  const profilePicture = postUser?.ProfilePicture;
 
   const handleLike = () => {
     likeMutation.mutate(post._id);
@@ -60,44 +66,47 @@ export default function PostCard({ post }: Props) {
 
   return (
     <View className="bg-white mx-3 mb-3 rounded-2xl shadow-sm border border-[#E8F5E9] overflow-hidden">
+      {/* Header */}
       <View className="flex-row items-center px-4 pt-4 pb-2">
         <TouchableOpacity
-          onPress={() => router.push(`/profile/${post.user?.Username}` as any)}
+          onPress={() => router.push(`/profile/${username}` as any)}
           className="flex-row items-center flex-1"
         >
-          {post.user?.ProfilePicture ? (
+          {profilePicture ? (
             <Image
-              source={{ uri: post.user.ProfilePicture }}
+              source={{ uri: profilePicture }}
               className="w-10 h-10 rounded-full border-2 border-[#83E509]"
             />
           ) : (
             <View className="w-10 h-10 rounded-full bg-[#3A6604] justify-center items-center border-2 border-[#83E509]">
               <Text className="text-white font-bold text-sm">
-                {post.user?.Username?.charAt(0).toUpperCase()}
+                {username?.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <View className="ml-3 flex-1">
             <Text className="text-[#3A6604] font-bold text-[15px]">{displayName}</Text>
             <Text className="text-[#486623] text-[13px]">
-              @{post.user?.Username} · {timeAgo}
+              @{username} · {timeAgo}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {post.user?._id === userId && (
+        {postUser?._id === userId && (
           <TouchableOpacity onPress={handleDelete} className="p-1">
             <Feather name="more-horizontal" size={20} color="#486623" />
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Content */}
       {post.Content ? (
         <View className="px-4 pb-2">
           <Text className="text-[#1a1a1a] text-[15px] leading-[22px]">{post.Content}</Text>
         </View>
       ) : null}
 
+      {/* Image */}
       {post.Image ? (
         <View className="px-4 pb-3">
           <Image
@@ -108,6 +117,7 @@ export default function PostCard({ post }: Props) {
         </View>
       ) : null}
 
+      {/* Actions */}
       <View className="flex-row items-center px-4 pb-4 gap-6">
         <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1.5">
           <Ionicons

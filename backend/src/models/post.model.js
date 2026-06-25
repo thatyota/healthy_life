@@ -30,7 +30,6 @@ const postSchema = new mongoose.Schema(
   },
   { 
     timestamps: true,
-    strictPopulate: false
   }
 );
 
