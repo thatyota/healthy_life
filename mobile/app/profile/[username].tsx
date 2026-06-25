@@ -28,24 +28,35 @@ export default function UserProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = async () => {
     try {
+      console.log("🔍 Buscando perfil:", username);
       const response = await fetch(`${API_URL}/users/profile/${username}`);
       const data = await response.json();
+      console.log("✅ Perfil encontrado:", data.user?.Username);
       setUser(data.user);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("❌ Erro perfil:", error.message);
     }
   };
 
   const fetchUserPosts = async () => {
     setPostsLoading(true);
+    setError(null);
     try {
+      console.log("🔍 Buscando posts do user:", username);
       const response = await postApi.getUserPosts(api, username as string);
+      console.log("✅ Posts encontrados:", response.data.posts?.length || 0);
+      console.log("📊 Posts data:", JSON.stringify(response.data, null, 2));
       setPosts(response.data.posts || []);
     } catch (error: any) {
-      console.error("Erro ao buscar posts:", error.message);
+      console.error("❌ Erro posts:", error.message);
+      console.error("   Status:", error.response?.status);
+      console.error("   Data:", error.response?.data);
+      setError(error.response?.data?.error || error.message);
+      setPosts([]);
     } finally {
       setPostsLoading(false);
     }
@@ -225,7 +236,14 @@ export default function UserProfileScreen() {
           </Text>
         </View>
 
-        {postsLoading ? (
+        {error ? (
+          <View className="py-10 justify-center items-center px-6">
+            <Text className="text-[#C62828] text-base text-center">Erro: {error}</Text>
+            <TouchableOpacity onPress={fetchUserPosts} className="mt-3 px-4 py-2 bg-[#65B307] rounded-full">
+              <Text className="text-white font-bold">Tentar novamente</Text>
+            </TouchableOpacity>
+          </View>
+        ) : postsLoading ? (
           <View className="py-10 justify-center items-center">
             <ActivityIndicator size="large" color="#65B307" />
           </View>
