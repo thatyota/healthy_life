@@ -124,4 +124,28 @@ export const followUser = asyncHandler (async (req,res) => {
       message: isFollowing ? "User unfollowed" : "User followed",
 
    });
+
+
+});
+
+export const searchUsers = asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  
+  if (!q || q.trim().length < 2) {
+    return res.status(400).json({ error: "Query must be at least 2 characters" });
+  }
+
+  const searchRegex = new RegExp(q.trim(), "i");
+
+  const users = await User.find({
+    $or: [
+      { Username: { $regex: searchRegex } },
+      { FirstName: { $regex: searchRegex } },
+      { LastName: { $regex: searchRegex } },
+    ],
+  })
+    .select("Username FirstName LastName ProfilePicture bio Followers")
+    .limit(20);
+
+  res.status(200).json({ users });
 });

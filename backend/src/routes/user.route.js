@@ -1,12 +1,12 @@
 import express from "express"
-import { followUser, getCurrentUser, getUserProfile, syncUser, updateProfile } from "../controllers/user.controller.js";
+import { followUser, getCurrentUser, getUserProfile, searchUsers, syncUser, updateProfile } from "../controllers/user.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router()
  
  //public route
 router.get("/profile/:username", getUserProfile);
-
+router.get("/search", searchUsers);
 
 //protected routes
 router.post("/sync", protectRoute, syncUser);
