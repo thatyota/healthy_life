@@ -1,6 +1,6 @@
-import { View, Text, Image, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { View, Text, Image, TouchableOpacity } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 interface Props {
   user: {
@@ -37,12 +37,8 @@ export default function UserSearchResult({ user }: Props) {
       )}
 
       <View className="flex-1 ml-3">
-        <Text className="text-[#3A6604] font-semibold text-[15px]">
-          {displayName}
-        </Text>
-        <Text className="text-[#486623] text-[14px] mt-[1px]">
-          @{user.Username}
-        </Text>
+        <Text className="text-[#3A6604] font-semibold text-[15px]">{displayName}</Text>
+        <Text className="text-[#486623] text-[14px] mt-[1px]">@{user.Username}</Text>
         {user.Followers && user.Followers.length > 0 ? (
           <Text className="text-[#65B307] text-[13px] mt-[2px]">
             {user.Followers.length.toLocaleString()} seguidores

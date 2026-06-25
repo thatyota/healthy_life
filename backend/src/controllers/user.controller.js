@@ -1,138 +1,62 @@
-import asyncHandler from "express-async-handler"
-import User from "../models/user.model.js"
-import Notification from "../models/notification.model.js"
-import  {getAuth} from "@clerk/express"
+import asyncHandler from "express-async-handler";
+import User from "../models/user.model.js";
+import Notification from "../models/notification.model.js";
+import { getAuth } from "@clerk/express";
+import { clerkClient } from "@clerk/express";
 
-import { clerkClient} from "@clerk/express"
+export const getUserProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  const user = await User.findOne({ Username: username });
+  if (!user) return res.status(404).json({ error: "User not found" });
 
-
-export const getUserProfile = asyncHandler( async (req,res) => {
-  const {username} = req.params;
-  const user = await User.findOne ({ username });
- if (!user) return  res.status(404).json({ error: "User not found"});
-
-
-   res.status(200).json({ user });
+  res.status(200).json({ user });
 });
 
-export const updateProfile = asyncHandler (async (req,res) => {
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const user = await User.findOneAndUpdate({ clerkId: userId }, req.body, { new: true });
+  if (!user) return res.status(404).json({ error: "User not found" });
 
-   const{ userId} = getAuth(req);
-   
-   const user = await User.findOneAndUpdate({ clerkId: userId}, req.body, {new: true}); 
-
-    if (!user) return res.status(404).json({ error: "Usser not found"});
-
-    res.status(200).json({ user})
+  res.status(200).json({ user });
 });
 
-export const syncUser = asyncHandler (async (req,res) => {
-   //first get user Id
-   const { userId} = getAuth(req);
+export const syncUser = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const existingUser = await User.findOne({ clerkId: userId });
 
-   //verifies if user exits on mongodb
-   const existingUser = await User.findOne ({clerkId: userId});
-   
-   if (existingUser) {
-     return res.status(200).json({user: existingUser, message: "User already exists"});
-     
-   }
+  if (existingUser) {
+    return res.status(200).json({ user: existingUser, message: "User already exists" });
+  }
 
-   //create new user from Clerk data
-   const clerkUser = await clerkClient.users.getUser(userId);
+  const clerkUser = await clerkClient.users.getUser(userId);
 
-     const userData = {
+  const userData = {
     clerkId: userId,
     email: clerkUser.emailAddresses[0].emailAddress,
     FirstName: clerkUser.firstName || "",
     LastName: clerkUser.lastName || "",
-    Username: clerkUser.emailAddresses[0].emailAddress.split("@")[0], 
+    Username: clerkUser.emailAddresses[0].emailAddress.split("@")[0],
     ProfilePicture: clerkUser.imageUrl || "",
-};
+  };
 
-     const user = await User.create(userData);
+  const user = await User.create(userData);
 
-     res.status(201).json({ user, message: "User created sucessfully"})
-    
-    
-     // temho que adicionar aqui o admin manualmente
-
+  res.status(201).json({ user, message: "User created successfully" });
 });
 
+export const getCurrentUser = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const user = await User.findOne({ clerkId: userId });
+  if (!user) return res.status(404).json({ error: "User not found" });
 
-
-export const getCurrentUser = asyncHandler (async (req, res) => {
-     //get current user Id
-  const {userId} = getAuth(req);
-  //check it
-  const user = await User.findOne({ clerkId: userId});
-    //if doesnt exist give an error
-   if(!user) return res.status(404).json({ error: "User not found"});
-    //If does exist return de user
-   resizeTo.status(200).json({ user });
-
-
-});
-
-
-export const followUser = asyncHandler (async (req,res) => {
-    // get current user Id
-   const { userId } = getAuth(req);
-   // get the Id from the user we are trying to follow
-   const { targetUserId } = req.params;
- // if you try to follow yourself you are going to get a error 
-   if( userId === targetUserId ) return res.status(400).json({ error: "You cannot follow yourself"});
-
-
-   // check if the user existes
-   const currentUser = await User.findOne({ clerkId: userId});
-   const targetUser = await User.findById(targetUserId);
-   
-    // check if the user existes if doesnt exit give an error
-   if (!currentUser || !targetUser) return res.status(404).json({error: "User not found"});
-
-     // check if you are trying to follow
-   const isFollowing = currentUser.following.includes(targetUser);
-   
-
-   if(isFollowing) {
-       //unfollow
-      await User.findByIdUpdate(currentUser._id, {
-         $pull: { following: targetUserId},
-      });
-       await User.findByIdUpdate(targetUserId, {
-         $pull: { followers: currentUser._id },
-      });
-   } else {
-     //following 
-     await User.findByIdUpdate(currentUser._id, {
-         $pull: { following: targetUserId},
-      });
-     await User.findByIdUpdate(targetUserId, {
-         $pull: { followers: currentUser._id },
-      });
-
-        // Create notification
-       await Notification.Create({
-         from:currentUser._id,
-         to: targetUserId,
-         type:"follow",
-       });
-   }
-
-   res.status(200).json({
-      message: isFollowing ? "User unfollowed" : "User followed",
-
-   });
-
-
+  res.status(200).json({ user });
 });
 
 export const searchUsers = asyncHandler(async (req, res) => {
   const { q } = req.query;
-  
-  if (!q || q.trim().length < 2) {
-    return res.status(400).json({ error: "Query must be at least 2 characters" });
+
+  if (!q || q.trim().length < 1) {
+    return res.status(400).json({ error: "Query must be at least 1 character" });
   }
 
   const searchRegex = new RegExp(q.trim(), "i");
@@ -144,8 +68,48 @@ export const searchUsers = asyncHandler(async (req, res) => {
       { LastName: { $regex: searchRegex } },
     ],
   })
-    .select("Username FirstName LastName ProfilePicture bio Followers")
+    .select("Username FirstName LastName ProfilePicture bio Followers Following")
     .limit(20);
 
   res.status(200).json({ users });
+});
+
+export const followUser = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const { targetUserId } = req.params;
+
+  if (userId === targetUserId) return res.status(400).json({ error: "You cannot follow yourself" });
+
+  const currentUser = await User.findOne({ clerkId: userId });
+  const targetUser = await User.findById(targetUserId);
+
+  if (!currentUser || !targetUser) return res.status(404).json({ error: "User not found" });
+
+  const isFollowing = currentUser.Following.includes(targetUserId);
+
+  if (isFollowing) {
+    await User.findByIdAndUpdate(currentUser._id, {
+      $pull: { Following: targetUserId },
+    });
+    await User.findByIdAndUpdate(targetUserId, {
+      $pull: { Followers: currentUser._id },
+    });
+  } else {
+    await User.findByIdAndUpdate(currentUser._id, {
+      $push: { Following: targetUserId },
+    });
+    await User.findByIdAndUpdate(targetUserId, {
+      $push: { Followers: currentUser._id },
+    });
+
+    await Notification.create({
+      from: currentUser._id,
+      to: targetUserId,
+      type: "follow",
+    });
+  }
+
+  res.status(200).json({
+    message: isFollowing ? "User unfollowed" : "User followed",
+  });
 });
