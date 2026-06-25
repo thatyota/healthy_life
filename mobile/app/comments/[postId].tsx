@@ -66,10 +66,24 @@ export default function CommentsPage() {
   };
 
   const handleSubmitComment = () => {
-    if (!commentText.trim()) return;
+    if (!commentText.trim()) {
+      console.log("⚠️ Comentário vazio, ignorando");
+      return;
+    }
+    
+    console.log("🚀 Enviando comentário:", commentText.trim());
+    
     createCommentMutation.mutate(
       { postId: postId as string, content: commentText.trim() },
-      { onSuccess: () => setCommentText("") }
+      {
+        onSuccess: () => {
+          console.log("✅ Comentário enviado com sucesso!");
+          setCommentText("");
+        },
+        onError: (error: any) => {
+          console.error("❌ Erro ao enviar:", error.message);
+        },
+      }
     );
   };
 
@@ -152,14 +166,18 @@ export default function CommentsPage() {
             placeholder="Adicionar comentário..."
             placeholderTextColor="#8E8E8E"
             className="flex-1 bg-[#F1F8E9] rounded-full px-4 py-2.5 text-[#1a1a1a] text-[14px]"
-            multiline
+            multiline={false}
             maxLength={280}
+            onSubmitEditing={handleSubmitComment}
+            returnKeyType="send"
           />
           <TouchableOpacity
             onPress={handleSubmitComment}
             disabled={!commentText.trim() || createCommentMutation.isPending}
             className={`px-4 py-2 rounded-full ${
-              commentText.trim() ? "bg-[#65B307]" : "bg-[#C8E6C9]"
+              commentText.trim() && !createCommentMutation.isPending
+                ? "bg-[#65B307]"
+                : "bg-[#C8E6C9]"
             }`}
           >
             <Text className="text-white font-bold text-sm">

@@ -22,8 +22,15 @@ export const useComments = (postId: string) => {
   return useQuery({
     queryKey: ["comments", postId],
     queryFn: async () => {
-      const response = await commentApi.getComments(api, postId);
-      return response.data.comments as Comment[];
+      try {
+        console.log(`🔍 Buscando comentários do post: ${postId}`);
+        const response = await commentApi.getComments(api, postId);
+        console.log("✅ Comentários:", response.data.comments?.length || 0);
+        return response.data.comments as Comment[];
+      } catch (error: any) {
+        console.error("❌ Erro ao buscar comentários:", error.message);
+        throw error;
+      }
     },
     enabled: !!postId,
   });
@@ -35,12 +42,17 @@ export const useCreateComment = () => {
 
   return useMutation({
     mutationFn: async ({ postId, content }: { postId: string; content: string }) => {
+      console.log(`📝 Criando comentário no post ${postId}:`, content);
       const response = await commentApi.createComment(api, postId, content);
+      console.log("✅ Comentário criado:", response.data);
       return response.data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["comments", variables.postId] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+    onError: (error: any) => {
+      console.error("❌ Erro ao criar comentário:", error.message);
     },
   });
 };
