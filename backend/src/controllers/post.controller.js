@@ -11,7 +11,7 @@ export const getPosts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .populate("User", "Username FirstName LastName ProfilePicture")
     .populate({
-      path: "Comments",
+      path: "comments",
       populate: {
         path: "User",
         select: "Username FirstName LastName ProfilePicture",
@@ -27,7 +27,7 @@ export const getPost = asyncHandler(async (req, res) => {
   const post = await Post.findById(postId)
     .populate("User", "Username FirstName LastName ProfilePicture")
     .populate({
-      path: "Comments",
+      path: "comments",
       populate: {
         path: "User",
         select: "Username FirstName LastName ProfilePicture",
@@ -49,7 +49,7 @@ export const getUserPosts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .populate("User", "Username FirstName LastName ProfilePicture")
     .populate({
-      path: "Comments",
+      path: "comments",
       populate: {
         path: "User",
         select: "Username FirstName LastName ProfilePicture",
