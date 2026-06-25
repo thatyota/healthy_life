@@ -1,8 +1,10 @@
+import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import { useLikePost, useDeletePost, Post } from "@/hooks/usePosts";
 import { useRouter } from "expo-router";
+import CommentModal from "./CommentModal";
 
 interface Props {
   post: Post;
@@ -12,7 +14,6 @@ function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
   if (seconds < 60) return "agora";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
@@ -32,8 +33,8 @@ export default function PostCard({ post }: Props) {
   const router = useRouter();
   const likeMutation = useLikePost();
   const deleteMutation = useDeletePost();
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
 
-  // Verifica se o user existe, senão usa fallback
   const postUser = post.User || post.user;
   const isLiked = post.Likes?.includes(userId || "");
   const likeCount = post.Likes?.length || 0;
@@ -41,8 +42,7 @@ export default function PostCard({ post }: Props) {
 
   const displayName =
     `${postUser?.FirstName || ""} ${postUser?.LastName || ""}`.trim() ||
-    postUser?.Username ||
-    "Utilizador";
+    postUser?.Username;
 
   const username = postUser?.Username || "user";
   const profilePicture = postUser?.ProfilePicture;
@@ -65,92 +65,111 @@ export default function PostCard({ post }: Props) {
   const timeAgo = post.createdAt ? formatTimeAgo(post.createdAt) : "";
 
   return (
-    <View className="bg-white mx-3 mb-3 rounded-2xl shadow-sm border border-[#E8F5E9] overflow-hidden">
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-4 pb-2">
-        <TouchableOpacity
-          onPress={() => router.push(`/profile/${username}` as any)}
-          className="flex-row items-center flex-1"
-        >
-          {profilePicture ? (
-            <Image
-              source={{ uri: profilePicture }}
-              className="w-10 h-10 rounded-full border-2 border-[#83E509]"
-            />
-          ) : (
-            <View className="w-10 h-10 rounded-full bg-[#3A6604] justify-center items-center border-2 border-[#83E509]">
-              <Text className="text-white font-bold text-sm">
-                {username?.charAt(0).toUpperCase()}
+    <>
+      <View className="bg-white mx-3 mb-3 rounded-2xl shadow-sm border border-[#E8F5E9] overflow-hidden">
+        {/* Header */}
+        <View className="flex-row items-center px-4 pt-4 pb-2">
+          <TouchableOpacity
+            onPress={() => router.push(`/profile/${username}` as any)}
+            className="flex-row items-center flex-1"
+          >
+            {profilePicture ? (
+              <Image
+                source={{ uri: profilePicture }}
+                className="w-10 h-10 rounded-full border-2 border-[#83E509]"
+              />
+            ) : (
+              <View className="w-10 h-10 rounded-full bg-[#3A6604] justify-center items-center border-2 border-[#83E509]">
+                <Text className="text-white font-bold text-sm">
+                  {username?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View className="ml-3 flex-1">
+              <Text className="text-[#3A6604] font-bold text-[15px]">{displayName}</Text>
+              <Text className="text-[#486623] text-[13px]">
+                @{username} · {timeAgo}
               </Text>
             </View>
-          )}
-          <View className="ml-3 flex-1">
-            <Text className="text-[#3A6604] font-bold text-[15px]">{displayName}</Text>
-            <Text className="text-[#486623] text-[13px]">
-              @{username} · {timeAgo}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {postUser?._id === userId && (
-          <TouchableOpacity onPress={handleDelete} className="p-1">
-            <Feather name="more-horizontal" size={20} color="#486623" />
           </TouchableOpacity>
-        )}
+
+          {postUser?._id === userId && (
+            <TouchableOpacity onPress={handleDelete} className="p-1">
+              <Feather name="more-horizontal" size={20} color="#486623" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Content */}
+        {post.Content ? (
+          <View className="px-4 pb-2">
+            <Text className="text-[#1a1a1a] text-[15px] leading-[22px]">{post.Content}</Text>
+          </View>
+        ) : null}
+
+        {/* Image */}
+        {post.Image ? (
+          <View className="px-4 pb-3">
+            <Image
+              source={{ uri: post.Image }}
+              className="w-full aspect-[4/3] rounded-xl"
+              resizeMode="cover"
+            />
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        <View className="flex-row items-center px-4 pb-4 gap-6">
+          {/* Like */}
+          <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1.5">
+            <Ionicons
+              name={isLiked ? "heart" : "heart-outline"}
+              size={22}
+              color={isLiked ? "#ED4956" : "#486623"}
+            />
+            {likeCount > 0 && (
+              <Text className={`text-[13px] font-semibold ${isLiked ? "text-[#ED4956]" : "text-[#486623]"}`}>
+                {likeCount}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Comment - abre modal */}
+          <TouchableOpacity
+            onPress={() => setCommentModalVisible(true)}
+            className="flex-row items-center gap-1.5"
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#486623" />
+            {commentCount > 0 && (
+              <Text className="text-[#486623] text-[13px] font-semibold">{commentCount}</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Share */}
+          <TouchableOpacity>
+            <Feather name="send" size={20} color="#486623" />
+          </TouchableOpacity>
+
+          {/* Save */}
+          <TouchableOpacity className="ml-auto">
+            <Ionicons name="bookmark-outline" size={20} color="#486623" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Content */}
-      {post.Content ? (
-        <View className="px-4 pb-2">
-          <Text className="text-[#1a1a1a] text-[15px] leading-[22px]">{post.Content}</Text>
-        </View>
-      ) : null}
-
-      {/* Image */}
-      {post.Image ? (
-        <View className="px-4 pb-3">
-          <Image
-            source={{ uri: post.Image }}
-            className="w-full aspect-[4/3] rounded-xl"
-            resizeMode="cover"
-          />
-        </View>
-      ) : null}
-
-      {/* Actions */}
-      <View className="flex-row items-center px-4 pb-4 gap-6">
-        <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1.5">
-          <Ionicons
-            name={isLiked ? "heart" : "heart-outline"}
-            size={22}
-            color={isLiked ? "#65B307" : "#486623"}
-          />
-          {likeCount > 0 && (
-            <Text
-              className={`text-[13px] font-semibold ${
-                isLiked ? "text-[#65B307]" : "text-[#486623]"
-              }`}
-            >
-              {likeCount}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity className="flex-row items-center gap-1.5">
-          <Ionicons name="chatbubble-outline" size={20} color="#486623" />
-          {commentCount > 0 && (
-            <Text className="text-[#486623] text-[13px] font-semibold">{commentCount}</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity>
-          <Feather name="send" size={20} color="#486623" />
-        </TouchableOpacity>
-
-        <TouchableOpacity className="ml-auto">
-          <Ionicons name="bookmark-outline" size={20} color="#486623" />
-        </TouchableOpacity>
-      </View>
-    </View>
+      {/* Comment Modal - estilo Instagram */}
+      <CommentModal
+        visible={commentModalVisible}
+        onClose={() => setCommentModalVisible(false)}
+        postId={post._id}
+        postUser={postUser}
+        postContent={post.Content}
+        postImage={post.Image}
+        likesCount={likeCount}
+        commentsCount={commentCount}
+        isLiked={isLiked}
+        onLike={handleLike}
+      />
+    </>
   );
 }

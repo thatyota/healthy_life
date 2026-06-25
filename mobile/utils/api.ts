@@ -34,3 +34,10 @@ export const postApi = {
   likePost: (api: AxiosInstance, postId: string) => api.post(`/posts/${postId}/like`),
   deletePost: (api: AxiosInstance, postId: string) => api.delete(`/posts/${postId}`),
 };
+
+export const commentApi = {
+  getComments: (api: AxiosInstance, postId: string) => api.get(`/comments/post/${postId}`),
+  createComment: (api: AxiosInstance, postId: string, content: string) =>
+    api.post(`/comments/post/${postId}`, { content }),
+  deleteComment: (api: AxiosInstance, commentId: string) => api.delete(`/comments/${commentId}`),
+};
