@@ -1,8 +1,8 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Notification } from "@/hooks/useNotifications";
+import { Notification, useMarkAsRead } from "@/hooks/useNotifications";
 import { useRouter } from "expo-router";
-import { useMarkAsRead } from "@/hooks/useNotifications";
+import { useAuth } from "@clerk/expo";
 
 interface Props {
   notification: Notification;
@@ -23,6 +23,7 @@ function formatTimeAgo(dateString: string): string {
 
 export default function NotificationItem({ notification }: Props) {
   const router = useRouter();
+  const { userId } = useAuth();
   const markAsRead = useMarkAsRead();
 
   const getNotificationText = () => {
@@ -38,16 +39,29 @@ export default function NotificationItem({ notification }: Props) {
     }
   };
 
-  const getIcon = () => {
+  const getIconName = () => {
     switch (notification.type) {
       case "follow":
-        return <Ionicons name="person-add" size={20} color="#65B307" />;
+        return "person-add";
       case "like":
-        return <Ionicons name="heart" size={20} color="#ED4956" />;
+        return "heart";
       case "comment":
-        return <Ionicons name="chatbubble" size={20} color="#3A6604" />;
+        return "chatbubble";
       default:
-        return <Ionicons name="notifications" size={20} color="#486623" />;
+        return "notifications";
+    }
+  };
+
+  const getIconColor = () => {
+    switch (notification.type) {
+      case "follow":
+        return "#65B307";
+      case "like":
+        return "#ED4956";
+      case "comment":
+        return "#3A6604";
+      default:
+        return "#486623";
     }
   };
 
@@ -65,47 +79,59 @@ export default function NotificationItem({ notification }: Props) {
 
   const displayName = `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim() || notification.from?.Username;
 
+  const isOwnProfile = userId === notification.from?._id;
+
   return (
     <TouchableOpacity
       onPress={handlePress}
+      activeOpacity={0.7}
       className={`flex-row items-center px-4 py-3 border-b border-[#E8F5E9] ${
         !notification.read ? "bg-[#E8F5E9]" : "bg-white"
       }`}
     >
-      {/* Avatar */}
-      {notification.from?.ProfilePicture ? (
-        <Image
-          source={{ uri: notification.from.ProfilePicture }}
-          className="w-12 h-12 rounded-full"
-        />
-      ) : (
-        <View className="w-12 h-12 rounded-full bg-[#3A6604] justify-center items-center">
-          <Text className="text-white font-bold text-lg">
-            {notification.from?.Username?.charAt(0).toUpperCase()}
-          </Text>
+      {/* Avatar com icon overlay */}
+      <View className="relative">
+        {notification.from?.ProfilePicture ? (
+          <Image
+            source={{ uri: notification.from.ProfilePicture }}
+            className="w-12 h-12 rounded-full"
+          />
+        ) : (
+          <View className="w-12 h-12 rounded-full bg-[#3A6604] justify-center items-center">
+            <Text className="text-white font-bold text-lg">
+              {notification.from?.Username?.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        
+        {/* Icon badge - posicionado no canto inferior direito */}
+        <View className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white justify-center items-center border border-[#E8F5E9]">
+          <Ionicons name={getIconName()} size={12} color={getIconColor()} />
         </View>
-      )}
-
-      {/* Icon badge */}
-      <View className="absolute left-14 top-3 w-5 h-5 rounded-full bg-white justify-center items-center">
-        {getIcon()}
       </View>
 
       {/* Content */}
-      <View className="flex-1 ml-3">
+      <View className="flex-1 ml-3 mr-2">
         <Text className="text-[#1a1a1a] text-[14px] leading-[20px]">
           <Text className="font-bold text-[#3A6604]">{displayName}</Text>{" "}
-          {getNotificationText()}
+          <Text className="text-[#1a1a1a]">{getNotificationText()}</Text>
         </Text>
         <Text className="text-[#486623] text-[12px] mt-1">
           {formatTimeAgo(notification.createdAt)}
         </Text>
       </View>
 
-      {/* Unread dot */}
-      {!notification.read && (
+      {/* Right side - Follow back button or unread dot */}
+      {notification.type === "follow" && !isOwnProfile ? (
+        <TouchableOpacity
+          onPress={() => router.push(`/profile/${notification.from.Username}` as any)}
+          className="px-4 py-1.5 bg-[#65B307] rounded-full"
+        >
+          <Text className="text-white font-bold text-[12px]">Seguir</Text>
+        </TouchableOpacity>
+      ) : !notification.read ? (
         <View className="w-2.5 h-2.5 rounded-full bg-[#65B307]" />
-      )}
+      ) : null}
     </TouchableOpacity>
   );
 }
