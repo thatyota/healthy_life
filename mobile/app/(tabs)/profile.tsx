@@ -6,30 +6,75 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Alert,
 } from "react-native";
 import { useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserPosts } from "@/hooks/useUserPosts";
 import { useSignOut } from "@/hooks/useSignOut";
+import { useDeleteAccount } from "@/hooks/useDeleteAccount";
 import ProfilePostCard from "@/components/ProfilePostCard";
 import EditProfileModal from "@/components/EditProfileModal";
 
 export default function ProfileScreen() {
-  const { userId } = useAuth();
   const { data: user, isLoading: userLoading, error: userError, refetch: refetchUser } = useCurrentUser();
   const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useUserPosts(user?.Username || "");
   const { handleSignOut } = useSignOut();
+  const deleteAccount = useDeleteAccount();
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [language, setLanguage] = useState("pt");
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchUser(), refetchPosts()]);
     setRefreshing(false);
   }, [refetchUser, refetchPosts]);
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Sair",
+      "Tens a certeza que queres sair?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sair",
+          style: "destructive",
+          onPress: () => {
+            setSettingsVisible(false);
+            handleSignOut();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccountPress = () => {
+    Alert.alert(
+      "Deletar conta",
+      "Esta ação é irreversível. Todos os teus dados serão eliminados permanentemente.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Deletar",
+          style: "destructive",
+          onPress: () => {
+            setSettingsVisible(false);
+            deleteAccount.mutate();
+          },
+        },
+      ]
+    );
+  };
+
+  const changeLanguage = (lang: string) => {
+    setLanguage(lang);
+  };
 
   if (userLoading) {
     return (
@@ -70,8 +115,8 @@ export default function ProfileScreen() {
       {/* Header */}
       <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-[#C8E6C9]">
         <Text className="text-xl font-bold text-[#3A6604]">Perfil</Text>
-        <TouchableOpacity onPress={handleSignOut}>
-          <Feather name="log-out" size={22} color="#C62828" />
+        <TouchableOpacity onPress={() => setSettingsVisible(true)} activeOpacity={0.7}>
+          <Ionicons name="settings-outline" size={24} color="#3A6604" />
         </TouchableOpacity>
       </View>
 
@@ -177,6 +222,70 @@ export default function ProfileScreen() {
         onClose={() => setEditModalVisible(false)}
         user={user}
       />
+
+      {/* Settings Modal */}
+      <Modal
+        visible={settingsVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-white rounded-t-3xl px-4 pt-6 pb-10">
+            {/* Header */}
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-xl font-bold text-[#3A6604]">Definições</Text>
+              <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                <Ionicons name="close" size={28} color="#486623" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Idioma */}
+            <Text className="text-[#486623] text-sm font-semibold uppercase mb-3">Idioma</Text>
+            <View className="flex-row gap-3 mb-6">
+              <TouchableOpacity
+                onPress={() => changeLanguage("pt")}
+                className={`flex-1 py-3 rounded-xl items-center border ${
+                  language === "pt" ? "bg-[#E8F5E9] border-[#65B307]" : "bg-white border-[#C8E6C9]"
+                }`}
+              >
+                <Text className={`font-bold ${language === "pt" ? "text-[#3A6604]" : "text-[#486623]"}`}>
+                  Português
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => changeLanguage("en")}
+                className={`flex-1 py-3 rounded-xl items-center border ${
+                  language === "en" ? "bg-[#E8F5E9] border-[#65B307]" : "bg-white border-[#C8E6C9]"
+                }`}
+              >
+                <Text className={`font-bold ${language === "en" ? "text-[#3A6604]" : "text-[#486623]"}`}>
+                  English
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Conta */}
+            <Text className="text-[#486623] text-sm font-semibold uppercase mb-3">Conta</Text>
+
+            <TouchableOpacity
+              onPress={handleLogout}
+              className="flex-row items-center py-4 px-4 bg-[#FFF3E0] rounded-xl mb-3"
+            >
+              <MaterialIcons name="logout" size={22} color="#E65100" />
+              <Text className="text-[#E65100] font-bold ml-3 text-[15px]">Sair da conta</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleDeleteAccountPress}
+              className="flex-row items-center py-4 px-4 bg-[#FFEBEE] rounded-xl"
+            >
+              <MaterialIcons name="delete-forever" size={22} color="#C62828" />
+              <Text className="text-[#C62828] font-bold ml-3 text-[15px]">Deletar conta</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

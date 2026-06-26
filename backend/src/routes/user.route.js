@@ -20,5 +20,6 @@ router.post("/sync", protectRoute, syncUser);
 router.get("/me", protectRoute, getCurrentUser);  // ← GET em vez de POST
 router.put("/profile", protectRoute, updateProfile);
 router.post("/follow/:targetUserId", protectRoute, followUser);
+router.delete("/me", protectRoute, deleteAccount);  // ← DELETE em vez de POST
 
 export default router;

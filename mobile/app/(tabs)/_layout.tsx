@@ -12,7 +12,6 @@ const TabsLayout = () => {
    const api = useApiClient();
    const [unreadCount, setUnreadCount] = useState(0);
 
-   // busca notificacoes para mostrar badge
    useEffect(() => {
       if (!isSignedIn) return;
 
@@ -28,8 +27,6 @@ const TabsLayout = () => {
       };
 
       fetchNotifications();
-
-      // atualiza a cada 30 segundos
       const interval = setInterval(fetchNotifications, 30000);
       return () => clearInterval(interval);
    }, [isSignedIn, api]);
@@ -67,7 +64,7 @@ const TabsLayout = () => {
             name="notifications"
             options={{
                title: "",
-               tabBarBadge: unreadCount > 0 ? unreadCount : undefined, // badge vermelho com numero
+               tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
                tabBarBadgeStyle: { 
                   backgroundColor: "#ED4956",
                   fontSize: 10,

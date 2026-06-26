@@ -113,3 +113,16 @@ export const followUser = asyncHandler(async (req, res) => {
     message: isFollowing ? "User unfollowed" : "User followed",
   });
 });
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const user = await User.findOne({ clerkId: userId });
+
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  await Post.deleteMany({ User: user._id });
+  await Comment.deleteMany({ user: user._id });
+  await Notification.deleteMany({ $or: [{ from: user._id }, { to: user._id }] });
+  await User.findByIdAndDelete(user._id);
+
+  res.status(200).json({ message: "Account deleted successfully" });
+});

@@ -9,7 +9,6 @@ interface Props {
   notification: Notification;
 }
 
-// converte data para "2m", "3h", "1d"
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -28,27 +27,23 @@ export default function NotificationItem({ notification }: Props) {
   const { userId } = useAuth();
   const markAsRead = useMarkAsRead();
   const deleteNotification = useDeleteNotification();
-  const translateX = useRef(new Animated.Value(0)).current; // posicao X do swipe
+  const translateX = useRef(new Animated.Value(0)).current;
 
-  // configura o gesto de swipe
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 5; // detecta swipe horizontal
+        return gestureState.dx < -5;
       },
       onPanResponderMove: (_, gestureState) => {
-        // so permite swipe para esquerda (dx negativo)
         if (gestureState.dx < 0 && gestureState.dx > -120) {
-          translateX.setValue(gestureState.dx); // move o item com o dedo
+          translateX.setValue(gestureState.dx);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < -80) {
-          // swipe longo - deleta direto
           deleteNotification.mutate(notification._id);
         }
-        // volta ao sitio (se nao deletou, anima de volta)
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
@@ -58,68 +53,49 @@ export default function NotificationItem({ notification }: Props) {
     })
   ).current;
 
-  // texto baseado no tipo de notificacao
   const getNotificationText = () => {
     switch (notification.type) {
-      case "follow":
-        return "começou a seguir-te";
-      case "like":
-        return "gostou da tua receita";
-      case "comment":
-        return "comentou na tua receita";
-      default:
-        return "interagiu contigo";
+      case "follow": return "começou a seguir-te";
+      case "like": return "gostou da tua receita";
+      case "comment": return "comentou na tua receita";
+      default: return "interagiu contigo";
     }
   };
 
-  // icone baseado no tipo
   const getIconName = () => {
     switch (notification.type) {
-      case "follow":
-        return "person-add";
-      case "like":
-        return "heart";
-      case "comment":
-        return "chatbubble";
-      default:
-        return "notifications";
+      case "follow": return "person-add";
+      case "like": return "heart";
+      case "comment": return "chatbubble";
+      default: return "notifications";
     }
   };
 
-  // cor do icone baseada no tipo
   const getIconColor = () => {
     switch (notification.type) {
-      case "follow":
-        return "#65B307";
-      case "like":
-        return "#ED4956";
-      case "comment":
-        return "#3A6604";
-      default:
-        return "#486623";
+      case "follow": return "#65B307";
+      case "like": return "#ED4956";
+      case "comment": return "#3A6604";
+      default: return "#486623";
     }
   };
 
-  // clica na notificacao - marca como lida e navega
   const handlePress = useCallback(() => {
     if (!notification.read) {
-      markAsRead.mutate(notification._id); // marca como lida no backend
+      markAsRead.mutate(notification._id);
     }
-
     if (notification.type === "follow") {
-      router.push(`/profile/${notification.from.Username}` as any); // vai para perfil
+      router.push(`/profile/${notification.from.Username}` as any);
     } else if (notification.post) {
-      router.push(`/post/${notification.post}` as any); // vai para o post
+      router.push(`/post/${notification.post}` as any);
     }
   }, [notification, markAsRead, router]);
 
-  // nome completo ou username
   const displayName = `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim() || notification.from?.Username;
   const isOwnProfile = userId === notification.from?._id;
 
   return (
     <View className="relative overflow-hidden">
-      {/* fundo vermelho visivel quando arrasta */}
       <View 
         className="absolute right-0 top-0 bottom-0 w-full bg-[#C62828] justify-center items-end pr-6"
         style={{ zIndex: 1 }}
@@ -130,22 +106,17 @@ export default function NotificationItem({ notification }: Props) {
         </View>
       </View>
 
-      {/* item swipeable por cima */}
       <Animated.View
-        style={{ 
-          transform: [{ translateX }],
-          zIndex: 2,
-        }}
+        style={{ transform: [{ translateX }], zIndex: 2 }}
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
           onPress={handlePress}
           activeOpacity={0.7}
           className={`flex-row items-center px-4 py-3.5 border-b border-[#E8F5E9] ${
-            !notification.read ? "bg-[#E8F5E9]" : "bg-white" // verde claro se nao lida
+            !notification.read ? "bg-[#E8F5E9]" : "bg-white"
           }`}
         >
-          {/* avatar com badge de icone */}
           <View className="relative">
             {notification.from?.ProfilePicture ? (
               <Image
@@ -154,21 +125,16 @@ export default function NotificationItem({ notification }: Props) {
               />
             ) : (
               <View className="w-[50px] h-[50px] rounded-full bg-[#3A6604] justify-center items-center">
-                <Text className="text-white font-bold text-xl">
+                <Text className="text-white font-bold text-lg">
                   {notification.from?.Username?.charAt(0).toUpperCase()}
                 </Text>
               </View>
             )}
-
-            {/* icone pequeno no canto do avatar */}
-            <View 
-              className="absolute -bottom-0.5 -right-0.5 w-[22px] h-[22px] rounded-full bg-white justify-center items-center border-2 border-[#E8F5E9]"
-            >
+            <View className="absolute -bottom-0.5 -right-0.5 w-[22px] h-[22px] rounded-full bg-white justify-center items-center border-2 border-[#E8F5E9]">
               <Ionicons name={getIconName()} size={12} color={getIconColor()} />
             </View>
           </View>
 
-          {/* texto da notificacao */}
           <View className="flex-1 ml-3.5 mr-2">
             <Text className="text-[#1a1a1a] text-[14px] leading-[20px]" numberOfLines={2}>
               <Text className="font-bold text-[#3A6604]">{displayName}</Text>
@@ -179,11 +145,10 @@ export default function NotificationItem({ notification }: Props) {
             </Text>
           </View>
 
-          {/* botao seguir ou ponto nao lido */}
           {notification.type === "follow" && !isOwnProfile ? (
             <TouchableOpacity
               onPress={(e) => {
-                e.stopPropagation(); // nao ativa o clique do item
+                e.stopPropagation();
                 router.push(`/profile/${notification.from.Username}` as any);
               }}
               className="px-4 py-2 bg-[#65B307] rounded-full"
@@ -191,9 +156,9 @@ export default function NotificationItem({ notification }: Props) {
               <Text className="text-white font-bold text-[12px]">Seguir</Text>
             </TouchableOpacity>
           ) : !notification.read ? (
-            <View className="w-2.5 h-2.5 rounded-full bg-[#65B307] ml-1" /> // ponto verde
+            <View className="w-2.5 h-2.5 rounded-full bg-[#65B307] ml-1" />
           ) : (
-            <View className="w-2.5 h-2.5 rounded-full bg-transparent ml-1" /> // espaco vazio
+            <View className="w-2.5 h-2.5 rounded-full bg-transparent ml-1" />
           )}
         </TouchableOpacity>
       </Animated.View>

@@ -17,19 +17,16 @@ export default function NotificationsScreen() {
   const markAllAsRead = useMarkAllAsRead();
   const [refreshing, setRefreshing] = useState(false);
 
-  // puxa para baixo para atualizar
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   }, [refetch]);
 
-  // conta notificacoes nao lidas
   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
 
   return (
     <SafeAreaView className="flex-1 bg-[#F1F8E9]">
-      {/* header com titulo e botao marcar todas */}
       <View className="flex-row justify-between items-center px-4 py-3.5 bg-white border-b border-[#C8E6C9]">
         <Text className="text-xl font-bold text-[#3A6604]">Notificações</Text>
         {unreadCount > 0 && (
@@ -66,7 +63,6 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        // estado vazio
         <View className="flex-1 justify-center items-center px-6">
           <View className="w-20 h-20 rounded-full bg-[#E8F5E9] justify-center items-center mb-4">
             <Ionicons name="notifications-outline" size={40} color="#65B307" />

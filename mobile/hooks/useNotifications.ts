@@ -18,10 +18,8 @@ export interface Notification {
   createdAt: string;
 }
 
-// busca todas as notificacoes do user
 export const useNotifications = () => {
   const api = useApiClient();
-
   return useQuery({
     queryKey: ["notifications"],
     queryFn: async () => {
@@ -31,27 +29,23 @@ export const useNotifications = () => {
   });
 };
 
-// marca uma notificacao como lida
 export const useMarkAsRead = () => {
   const api = useApiClient();
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (notificationId: string) => {
       const response = await api.put(`/notifications/${notificationId}/read`);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] }); // atualiza a lista
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 };
 
-// marca todas como lidas
 export const useMarkAllAsRead = () => {
   const api = useApiClient();
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async () => {
       const response = await api.put("/notifications/read-all");
@@ -63,11 +57,9 @@ export const useMarkAllAsRead = () => {
   });
 };
 
-// elimina uma notificacao
 export const useDeleteNotification = () => {
   const api = useApiClient();
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (notificationId: string) => {
       const response = await api.delete(`/notifications/${notificationId}`);
