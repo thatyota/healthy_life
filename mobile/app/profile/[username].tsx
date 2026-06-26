@@ -6,11 +6,13 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Alert,
 } from "react-native";
 import React, { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import { useApiClient, postApi } from "@/utils/api";
 import { Post } from "@/hooks/usePosts";
@@ -20,7 +22,7 @@ const API_URL = "https://healthy-life-sable.vercel.app/api";
 export default function UserProfileScreen() {
   const { username } = useLocalSearchParams();
   const router = useRouter();
-  const { userId, getToken } = useAuth();
+  const { userId, getToken, signOut } = useAuth();
   const api = useApiClient();
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -28,34 +30,26 @@ export default function UserProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false); // mostra modal de settings
+  const [language, setLanguage] = useState("pt"); // idioma atual
 
   const fetchProfile = async () => {
     try {
-      console.log("🔍 Buscando perfil:", username);
       const response = await fetch(`${API_URL}/users/profile/${username}`);
       const data = await response.json();
-      console.log("✅ Perfil encontrado:", data.user?.Username);
       setUser(data.user);
     } catch (error: any) {
-      console.error("❌ Erro perfil:", error.message);
+      console.error("Erro perfil:", error.message);
     }
   };
 
   const fetchUserPosts = async () => {
     setPostsLoading(true);
-    setError(null);
     try {
-      console.log("🔍 Buscando posts do user:", username);
       const response = await postApi.getUserPosts(api, username as string);
-      console.log("✅ Posts encontrados:", response.data.posts?.length || 0);
-      console.log("📊 Posts data:", JSON.stringify(response.data, null, 2));
       setPosts(response.data.posts || []);
     } catch (error: any) {
-      console.error("❌ Erro posts:", error.message);
-      console.error("   Status:", error.response?.status);
-      console.error("   Data:", error.response?.data);
-      setError(error.response?.data?.error || error.message);
+      console.error("Erro posts:", error.message);
       setPosts([]);
     } finally {
       setPostsLoading(false);
@@ -97,6 +91,31 @@ export default function UserProfileScreen() {
     }
   };
 
+  // faz logout
+  const handleLogout = async () => {
+    Alert.alert(
+      "Sair",
+      "Tens a certeza que queres sair?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sair",
+          style: "destructive",
+          onPress: async () => {
+            await signOut();
+            router.replace("/(auth)");
+          },
+        },
+      ]
+    );
+  };
+
+  // muda idioma
+  const changeLanguage = (lang: string) => {
+    setLanguage(lang);
+    setShowSettings(false);
+  };
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-[#F1F8E9] justify-center items-center">
@@ -119,16 +138,19 @@ export default function UserProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#F1F8E9]">
       {/* Header */}
-      <View className="flex-row items-center px-4 py-3 bg-white border-b border-[#C8E6C9]">
+      <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-[#C8E6C9]">
         <TouchableOpacity onPress={() => router.back()} className="mr-4">
           <Feather name="arrow-left" size={24} color="#3A6604" />
         </TouchableOpacity>
-        <View>
-          <Text className="font-bold text-lg text-[#3A6604]">{displayName}</Text>
-          <Text className="text-[#486623] text-sm">
-            {user.Followers?.length || 0} seguidores
-          </Text>
-        </View>
+
+        <Text className="font-bold text-lg text-[#3A6604] flex-1">{displayName}</Text>
+
+        {/* botao settings so no teu perfil */}
+        {isOwnProfile && (
+          <TouchableOpacity onPress={() => setShowSettings(true)}>
+            <Ionicons name="settings-outline" size={24} color="#3A6604" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -182,6 +204,16 @@ export default function UserProfileScreen() {
               </Text>
             </TouchableOpacity>
           )}
+
+          {/* botao editar perfil so no teu perfil */}
+          {isOwnProfile && (
+            <TouchableOpacity
+              onPress={() => router.push("/edit-profile" as any)}
+              className="px-5 py-2 bg-white border border-[#65B307] rounded-full"
+            >
+              <Text className="text-[#3A6604] font-bold text-sm">Editar perfil</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Info */}
@@ -232,18 +264,11 @@ export default function UserProfileScreen() {
         <View className="flex-row items-center px-4 py-3">
           <Ionicons name="restaurant-outline" size={18} color="#3A6604" />
           <Text className="text-[#3A6604] font-bold text-lg ml-2">
-            Receitas de {user.FirstName || user.Username}
+            {isOwnProfile ? "Minhas Receitas" : `Receitas de ${user.FirstName || user.Username}`}
           </Text>
         </View>
 
-        {error ? (
-          <View className="py-10 justify-center items-center px-6">
-            <Text className="text-[#C62828] text-base text-center">Erro: {error}</Text>
-            <TouchableOpacity onPress={fetchUserPosts} className="mt-3 px-4 py-2 bg-[#65B307] rounded-full">
-              <Text className="text-white font-bold">Tentar novamente</Text>
-            </TouchableOpacity>
-          </View>
-        ) : postsLoading ? (
+        {postsLoading ? (
           <View className="py-10 justify-center items-center">
             <ActivityIndicator size="large" color="#65B307" />
           </View>
@@ -308,11 +333,66 @@ export default function UserProfileScreen() {
               Ainda não há receitas
             </Text>
             <Text className="text-[#486623] text-base mt-2 text-center">
-              Este chef ainda não partilhou nenhuma receita.
+              {isOwnProfile ? "Partilha a tua primeira receita!" : "Este chef ainda não partilhou nenhuma receita."}
             </Text>
           </View>
         )}
       </ScrollView>
+
+      {/* Modal de Settings */}
+      <Modal
+        visible={showSettings}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-white rounded-t-3xl px-4 pt-6 pb-10">
+            {/* Header do modal */}
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-xl font-bold text-[#3A6604]">Definições</Text>
+              <TouchableOpacity onPress={() => setShowSettings(false)}>
+                <Ionicons name="close" size={28} color="#486623" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Secao Idioma */}
+            <Text className="text-[#486623] text-sm font-semibold uppercase mb-3">Idioma</Text>
+            <View className="flex-row gap-3 mb-6">
+              <TouchableOpacity
+                onPress={() => changeLanguage("pt")}
+                className={`flex-1 py-3 rounded-xl items-center border ${
+                  language === "pt" ? "bg-[#E8F5E9] border-[#65B307]" : "bg-white border-[#C8E6C9]"
+                }`}
+              >
+                <Text className={`font-bold ${language === "pt" ? "text-[#3A6604]" : "text-[#486623]"}`}>
+                  🇵🇹 Português
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => changeLanguage("en")}
+                className={`flex-1 py-3 rounded-xl items-center border ${
+                  language === "en" ? "bg-[#E8F5E9] border-[#65B307]" : "bg-white border-[#C8E6C9]"
+                }`}
+              >
+                <Text className={`font-bold ${language === "en" ? "text-[#3A6604]" : "text-[#486623]"}`}>
+                  🇬🇧 English
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Secao Conta */}
+            <Text className="text-[#486623] text-sm font-semibold uppercase mb-3">Conta</Text>
+            <TouchableOpacity
+              onPress={handleLogout}
+              className="flex-row items-center py-4 px-4 bg-[#FFEBEE] rounded-xl"
+            >
+              <MaterialIcons name="logout" size={22} color="#C62828" />
+              <Text className="text-[#C62828] font-bold ml-3 text-[15px]">Sair da conta</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

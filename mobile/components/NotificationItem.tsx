@@ -1,4 +1,4 @@
-import { View, Text, Image, TouchableOpacity, Animated, PanResponder, Alert } from "react-native";
+import { View, Text, Image, TouchableOpacity, Animated, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Notification, useMarkAsRead, useDeleteNotification } from "@/hooks/useNotifications";
 import { useRouter } from "expo-router";
@@ -35,29 +35,25 @@ export default function NotificationItem({ notification }: Props) {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dx < -5; // so permite swipe para esquerda
+        return Math.abs(gestureState.dx) > 5; // detecta swipe horizontal
       },
       onPanResponderMove: (_, gestureState) => {
+        // so permite swipe para esquerda (dx negativo)
         if (gestureState.dx < 0 && gestureState.dx > -120) {
           translateX.setValue(gestureState.dx); // move o item com o dedo
         }
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < -80) {
-          // swipe longo - mostra botao eliminar
-          Animated.spring(translateX, {
-            toValue: -80,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
-        } else {
-          // swipe curto - volta ao sitio
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
+          // swipe longo - deleta direto
+          deleteNotification.mutate(notification._id);
         }
+        // volta ao sitio (se nao deletou, anima de volta)
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+        }).start();
       },
     })
   ).current;
@@ -117,47 +113,24 @@ export default function NotificationItem({ notification }: Props) {
     }
   }, [notification, markAsRead, router]);
 
-  // mostra alerta de confirmacao antes de eliminar
-  const handleDelete = useCallback(() => {
-    Alert.alert(
-      "Eliminar notificação",
-      "Tens a certeza que queres eliminar esta notificação?",
-      [
-        { text: "Cancelar", style: "cancel", onPress: () => {
-          // volta o item ao sitio
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
-        }},
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: () => deleteNotification.mutate(notification._id),
-        },
-      ]
-    );
-  }, [notification._id, deleteNotification, translateX]);
-
   // nome completo ou username
   const displayName = `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim() || notification.from?.Username;
   const isOwnProfile = userId === notification.from?._id;
 
   return (
     <View className="relative overflow-hidden">
-      {/* botao eliminar escondido atras do item */}
+      {/* fundo vermelho visivel quando arrasta */}
       <View 
-        className="absolute right-0 top-0 bottom-0 w-[80px] bg-[#C62828] justify-center items-center"
+        className="absolute right-0 top-0 bottom-0 w-full bg-[#C62828] justify-center items-end pr-6"
         style={{ zIndex: 1 }}
       >
-        <TouchableOpacity onPress={handleDelete} className="items-center justify-center w-full h-full">
-          <Ionicons name="trash-outline" size={22} color="white" />
+        <View className="items-center">
+          <Ionicons name="trash-outline" size={24} color="white" />
           <Text className="text-white text-[11px] mt-1 font-medium">Eliminar</Text>
-        </TouchableOpacity>
+        </View>
       </View>
 
-      {/* item swipeable */}
+      {/* item swipeable por cima */}
       <Animated.View
         style={{ 
           transform: [{ translateX }],
