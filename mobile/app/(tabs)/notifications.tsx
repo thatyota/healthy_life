@@ -17,26 +17,29 @@ export default function NotificationsScreen() {
   const markAllAsRead = useMarkAllAsRead();
   const [refreshing, setRefreshing] = useState(false);
 
+  // puxa para baixo para atualizar
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   }, [refetch]);
 
+  // conta notificacoes nao lidas
   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
 
   return (
     <SafeAreaView className="flex-1 bg-[#F1F8E9]">
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-[#C8E6C9]">
+      {/* header com titulo e botao marcar todas */}
+      <View className="flex-row justify-between items-center px-4 py-3.5 bg-white border-b border-[#C8E6C9]">
         <Text className="text-xl font-bold text-[#3A6604]">Notificações</Text>
         {unreadCount > 0 && (
           <TouchableOpacity
             onPress={() => markAllAsRead.mutate()}
-            className="flex-row items-center gap-1"
+            className="flex-row items-center gap-1.5 px-3 py-1.5 bg-[#E8F5E9] rounded-full"
+            activeOpacity={0.7}
           >
-            <Feather name="check-circle" size={18} color="#65B307" />
-            <Text className="text-[#65B307] font-semibold text-sm">
+            <Feather name="check-circle" size={16} color="#65B307" />
+            <Text className="text-[#65B307] font-semibold text-[13px]">
               Marcar todas lidas
             </Text>
           </TouchableOpacity>
@@ -63,6 +66,7 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
         />
       ) : (
+        // estado vazio
         <View className="flex-1 justify-center items-center px-6">
           <View className="w-20 h-20 rounded-full bg-[#E8F5E9] justify-center items-center mb-4">
             <Ionicons name="notifications-outline" size={40} color="#65B307" />

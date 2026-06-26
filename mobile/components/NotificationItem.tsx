@@ -1,13 +1,15 @@
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, Image, TouchableOpacity, Animated, PanResponder, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Notification, useMarkAsRead } from "@/hooks/useNotifications";
+import { Notification, useMarkAsRead, useDeleteNotification } from "@/hooks/useNotifications";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/expo";
+import { useRef, useCallback } from "react";
 
 interface Props {
   notification: Notification;
 }
 
+// converte data para "2m", "3h", "1d"
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -25,7 +27,42 @@ export default function NotificationItem({ notification }: Props) {
   const router = useRouter();
   const { userId } = useAuth();
   const markAsRead = useMarkAsRead();
+  const deleteNotification = useDeleteNotification();
+  const translateX = useRef(new Animated.Value(0)).current; // posicao X do swipe
 
+  // configura o gesto de swipe
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dx < -5; // so permite swipe para esquerda
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0 && gestureState.dx > -120) {
+          translateX.setValue(gestureState.dx); // move o item com o dedo
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -80) {
+          // swipe longo - mostra botao eliminar
+          Animated.spring(translateX, {
+            toValue: -80,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        } else {
+          // swipe curto - volta ao sitio
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // texto baseado no tipo de notificacao
   const getNotificationText = () => {
     switch (notification.type) {
       case "follow":
@@ -39,6 +76,7 @@ export default function NotificationItem({ notification }: Props) {
     }
   };
 
+  // icone baseado no tipo
   const getIconName = () => {
     switch (notification.type) {
       case "follow":
@@ -52,6 +90,7 @@ export default function NotificationItem({ notification }: Props) {
     }
   };
 
+  // cor do icone baseada no tipo
   const getIconColor = () => {
     switch (notification.type) {
       case "follow":
@@ -65,73 +104,126 @@ export default function NotificationItem({ notification }: Props) {
     }
   };
 
-  const handlePress = () => {
+  // clica na notificacao - marca como lida e navega
+  const handlePress = useCallback(() => {
     if (!notification.read) {
-      markAsRead.mutate(notification._id);
+      markAsRead.mutate(notification._id); // marca como lida no backend
     }
 
     if (notification.type === "follow") {
-      router.push(`/profile/${notification.from.Username}` as any);
+      router.push(`/profile/${notification.from.Username}` as any); // vai para perfil
     } else if (notification.post) {
-      router.push(`/post/${notification.post}` as any);
+      router.push(`/post/${notification.post}` as any); // vai para o post
     }
-  };
+  }, [notification, markAsRead, router]);
 
+  // mostra alerta de confirmacao antes de eliminar
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      "Eliminar notificação",
+      "Tens a certeza que queres eliminar esta notificação?",
+      [
+        { text: "Cancelar", style: "cancel", onPress: () => {
+          // volta o item ao sitio
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        }},
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => deleteNotification.mutate(notification._id),
+        },
+      ]
+    );
+  }, [notification._id, deleteNotification, translateX]);
+
+  // nome completo ou username
   const displayName = `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim() || notification.from?.Username;
-
   const isOwnProfile = userId === notification.from?._id;
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.7}
-      className={`flex-row items-center px-4 py-3 border-b border-[#E8F5E9] ${
-        !notification.read ? "bg-[#E8F5E9]" : "bg-white"
-      }`}
-    >
-      {/* Avatar com icon overlay */}
-      <View className="relative">
-        {notification.from?.ProfilePicture ? (
-          <Image
-            source={{ uri: notification.from.ProfilePicture }}
-            className="w-12 h-12 rounded-full"
-          />
-        ) : (
-          <View className="w-12 h-12 rounded-full bg-[#3A6604] justify-center items-center">
-            <Text className="text-white font-bold text-lg">
-              {notification.from?.Username?.charAt(0).toUpperCase()}
+    <View className="relative overflow-hidden">
+      {/* botao eliminar escondido atras do item */}
+      <View 
+        className="absolute right-0 top-0 bottom-0 w-[80px] bg-[#C62828] justify-center items-center"
+        style={{ zIndex: 1 }}
+      >
+        <TouchableOpacity onPress={handleDelete} className="items-center justify-center w-full h-full">
+          <Ionicons name="trash-outline" size={22} color="white" />
+          <Text className="text-white text-[11px] mt-1 font-medium">Eliminar</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* item swipeable */}
+      <Animated.View
+        style={{ 
+          transform: [{ translateX }],
+          zIndex: 2,
+        }}
+        {...panResponder.panHandlers}
+      >
+        <TouchableOpacity
+          onPress={handlePress}
+          activeOpacity={0.7}
+          className={`flex-row items-center px-4 py-3.5 border-b border-[#E8F5E9] ${
+            !notification.read ? "bg-[#E8F5E9]" : "bg-white" // verde claro se nao lida
+          }`}
+        >
+          {/* avatar com badge de icone */}
+          <View className="relative">
+            {notification.from?.ProfilePicture ? (
+              <Image
+                source={{ uri: notification.from.ProfilePicture }}
+                className="w-[50px] h-[50px] rounded-full"
+              />
+            ) : (
+              <View className="w-[50px] h-[50px] rounded-full bg-[#3A6604] justify-center items-center">
+                <Text className="text-white font-bold text-xl">
+                  {notification.from?.Username?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+
+            {/* icone pequeno no canto do avatar */}
+            <View 
+              className="absolute -bottom-0.5 -right-0.5 w-[22px] h-[22px] rounded-full bg-white justify-center items-center border-2 border-[#E8F5E9]"
+            >
+              <Ionicons name={getIconName()} size={12} color={getIconColor()} />
+            </View>
+          </View>
+
+          {/* texto da notificacao */}
+          <View className="flex-1 ml-3.5 mr-2">
+            <Text className="text-[#1a1a1a] text-[14px] leading-[20px]" numberOfLines={2}>
+              <Text className="font-bold text-[#3A6604]">{displayName}</Text>
+              <Text className="text-[#1a1a1a]"> {getNotificationText()}</Text>
+            </Text>
+            <Text className="text-[#65B307] text-[12px] mt-1 font-medium">
+              {formatTimeAgo(notification.createdAt)}
             </Text>
           </View>
-        )}
-        
-        {/* Icon badge - posicionado no canto inferior direito */}
-        <View className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white justify-center items-center border border-[#E8F5E9]">
-          <Ionicons name={getIconName()} size={12} color={getIconColor()} />
-        </View>
-      </View>
 
-      {/* Content */}
-      <View className="flex-1 ml-3 mr-2">
-        <Text className="text-[#1a1a1a] text-[14px] leading-[20px]">
-          <Text className="font-bold text-[#3A6604]">{displayName}</Text>{" "}
-          <Text className="text-[#1a1a1a]">{getNotificationText()}</Text>
-        </Text>
-        <Text className="text-[#486623] text-[12px] mt-1">
-          {formatTimeAgo(notification.createdAt)}
-        </Text>
-      </View>
-
-      {/* Right side - Follow back button or unread dot */}
-      {notification.type === "follow" && !isOwnProfile ? (
-        <TouchableOpacity
-          onPress={() => router.push(`/profile/${notification.from.Username}` as any)}
-          className="px-4 py-1.5 bg-[#65B307] rounded-full"
-        >
-          <Text className="text-white font-bold text-[12px]">Seguir</Text>
+          {/* botao seguir ou ponto nao lido */}
+          {notification.type === "follow" && !isOwnProfile ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation(); // nao ativa o clique do item
+                router.push(`/profile/${notification.from.Username}` as any);
+              }}
+              className="px-4 py-2 bg-[#65B307] rounded-full"
+            >
+              <Text className="text-white font-bold text-[12px]">Seguir</Text>
+            </TouchableOpacity>
+          ) : !notification.read ? (
+            <View className="w-2.5 h-2.5 rounded-full bg-[#65B307] ml-1" /> // ponto verde
+          ) : (
+            <View className="w-2.5 h-2.5 rounded-full bg-transparent ml-1" /> // espaco vazio
+          )}
         </TouchableOpacity>
-      ) : !notification.read ? (
-        <View className="w-2.5 h-2.5 rounded-full bg-[#65B307]" />
-      ) : null}
-    </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }

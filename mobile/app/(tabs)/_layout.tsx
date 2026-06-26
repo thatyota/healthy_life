@@ -1,17 +1,38 @@
 import { View, Text } from 'react-native'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Redirect, Tabs } from 'expo-router'
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/expo';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useApiClient } from '@/utils/api';
 
 const TabsLayout = () => {
    const insets = useSafeAreaInsets();
    const { isSignedIn } = useAuth();
-   const { data: notifications } = useNotifications();
-   
-   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
+   const api = useApiClient();
+   const [unreadCount, setUnreadCount] = useState(0);
+
+   // busca notificacoes para mostrar badge
+   useEffect(() => {
+      if (!isSignedIn) return;
+
+      const fetchNotifications = async () => {
+         try {
+            const response = await api.get('/notifications');
+            const notifications = response.data.notifications || [];
+            const unread = notifications.filter((n: any) => !n.read).length;
+            setUnreadCount(unread);
+         } catch (error) {
+            console.error('Erro ao buscar notificações:', error);
+         }
+      };
+
+      fetchNotifications();
+
+      // atualiza a cada 30 segundos
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+   }, [isSignedIn, api]);
 
    if (!isSignedIn) return <Redirect href="/(auth)"/>;
 
@@ -46,7 +67,7 @@ const TabsLayout = () => {
             name="notifications"
             options={{
                title: "",
-               tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+               tabBarBadge: unreadCount > 0 ? unreadCount : undefined, // badge vermelho com numero
                tabBarBadgeStyle: { 
                   backgroundColor: "#ED4956",
                   fontSize: 10,
@@ -54,11 +75,7 @@ const TabsLayout = () => {
                   height: 16,
                   borderRadius: 8,
                },
-               tabBarIcon: ({color, size}) => (
-                  <View>
-                     <Feather name='bell' size={size} color={color}/>
-                  </View>
-               )
+               tabBarIcon: ({color, size}) => <Feather name='bell' size={size} color={color}/>
             }}
          />
          <Tabs.Screen
