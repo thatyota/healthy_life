@@ -1,5 +1,7 @@
 import asyncHandler from "express-async-handler";
 import User from "../models/user.model.js";
+import Post from "../models/post.model.js";
+import Comment from "../models/comment.model.js";
 import Notification from "../models/notification.model.js";
 import { getAuth } from "@clerk/express";
 import { clerkClient } from "@clerk/express";
@@ -113,15 +115,20 @@ export const followUser = asyncHandler(async (req, res) => {
     message: isFollowing ? "User unfollowed" : "User followed",
   });
 });
+
 export const deleteAccount = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
   const user = await User.findOne({ clerkId: userId });
 
   if (!user) return res.status(404).json({ error: "User not found" });
 
+  // deleta posts do user
   await Post.deleteMany({ User: user._id });
+  // deleta comments do user
   await Comment.deleteMany({ user: user._id });
+  // deleta notificações relacionadas
   await Notification.deleteMany({ $or: [{ from: user._id }, { to: user._id }] });
+  // deleta o user
   await User.findByIdAndDelete(user._id);
 
   res.status(200).json({ message: "Account deleted successfully" });
