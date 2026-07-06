@@ -10,7 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import { usePosts, useLikePost } from "@/hooks/usePosts";
 import { useComments, useCreateComment } from "@/hooks/useComments";
 import CommentItem from "@/components/CommentItem";

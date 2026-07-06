@@ -11,7 +11,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import { useApiClient, postApi } from "@/utils/api";
 import { Post } from "@/hooks/usePosts";
 

@@ -1,6 +1,6 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import { Comment, useDeleteComment } from "@/hooks/useComments";
 
 interface Props {

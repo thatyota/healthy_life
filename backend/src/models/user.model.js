@@ -54,6 +54,23 @@ const userSchema = new mongoose.Schema(
                 ref: "User",
             },
         ],
+        // ========== CAMPOS DE DESATIVACAO/REATIVACAO ==========
+        isDeactivated: {
+            type: Boolean,
+            default: false, // false = conta ativa, true = conta desativada
+        },
+        deactivatedAt: {
+            type: Date,
+            default: null, // data em que a conta foi desativada
+        },
+        reactivationCode: {
+            type: String,
+            default: null, // codigo de 6 digitos para reativar
+        },
+        reactivationCodeExpires: {
+            type: Date,
+            default: null, // data de expiracao do codigo (10 min)
+        },
     },
     { timestamps: true }
 );

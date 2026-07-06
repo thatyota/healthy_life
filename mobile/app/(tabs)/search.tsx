@@ -69,7 +69,7 @@ export default function SearchScreen() {
               <Feather name="search" size={32} color="#65B307" />
             </View>
             <Text className="text-[#486623] text-base text-center">
-              Nenhum chef encontrado para "{query}"
+              Nenhum chef encontrado para {`"${query}"`}
             </Text>
           </View>
         ) : (

@@ -9,7 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import { useLikePost, useDeletePost, Post } from "@/hooks/usePosts";
 import { useRouter } from "expo-router";
 

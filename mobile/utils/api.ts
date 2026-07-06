@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import axios, { AxiosInstance } from "axios";
 
 const API_BASE_URL = "https://healthy-life-sable.vercel.app/api";

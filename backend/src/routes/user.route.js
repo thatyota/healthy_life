@@ -7,20 +7,28 @@ import {
   syncUser,
   followUser,
   searchUsers,
-  deleteAccount,  // <-- ADICIONAR ESTA IMPORTAÇÃO
+  deleteAccount,
+  checkDeactivatedAccount,
+  sendReactivationCode,
+  reactivateAccount,
 } from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-// public routes
+// rotas publicas
 router.get("/profile/:username", getUserProfile);
 router.get("/search", searchUsers);
 
-// protected routes
-router.post("/sync", protectRoute, syncUser);
+// rotas para reativacao (publicas — nao precisam de auth)
+router.post("/check-deactivated", checkDeactivatedAccount);
+router.post("/send-reactivation-code", sendReactivationCode);
+router.post("/reactivate", reactivateAccount);
+
+// rotas protegidas
 router.get("/me", protectRoute, getCurrentUser);
 router.put("/profile", protectRoute, updateProfile);
+router.post("/sync", protectRoute, syncUser);
 router.post("/follow/:targetUserId", protectRoute, followUser);
-router.delete("/me", protectRoute, deleteAccount);  // <-- ADICIONAR ESTA ROTA
+router.delete("/me", protectRoute, deleteAccount);
 
 export default router;

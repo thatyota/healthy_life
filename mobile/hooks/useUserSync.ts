@@ -1,5 +1,5 @@
 import { useApiClient, userApi } from "@/utils/api";
-import { useAuth } from "@clerk/expo"
+import { useAuth } from "@clerk/clerk-expo"
 import { useMutation } from "@tanstack/react-query";
 import { useDebugValue, useEffect } from "react";
 

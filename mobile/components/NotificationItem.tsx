@@ -2,7 +2,7 @@ import { View, Text, Image, TouchableOpacity, Animated, PanResponder } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { Notification, useMarkAsRead, useDeleteNotification } from "@/hooks/useNotifications";
 import { useRouter } from "expo-router";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "@clerk/clerk-expo";
 import { useRef, useCallback } from "react";
 
 interface Props {
@@ -28,25 +28,23 @@ export default function NotificationItem({ notification }: Props) {
   const markAsRead = useMarkAsRead();
   const deleteNotification = useDeleteNotification();
   const translateX = useRef(new Animated.Value(0)).current;
-  const itemHeight = useRef(80).current;
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // só ativa se for swipe horizontal para esquerda
         return gestureState.dx < -10 && Math.abs(gestureState.dy) < 30;
       },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0 && gestureState.dx > -150) {
+        if (gestureState.dx < 0 && gestureState.dx > -200) {
           translateX.setValue(gestureState.dx);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -80) {
-          // swipe longo - anima para fora e deleta
+        if (gestureState.dx < -100) {
+          // swipe longo - deleta
           Animated.timing(translateX, {
-            toValue: -400,
+            toValue: -500,
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
@@ -106,75 +104,107 @@ export default function NotificationItem({ notification }: Props) {
   const isOwnProfile = userId === notification.from?._id;
 
   return (
-    <View className="relative overflow-hidden" style={{ height: itemHeight }}>
-      {/* fundo vermelho com icone do lixo */}
+    <View style={{ position: "relative", overflow: "hidden" }}>
+      {/* fundo vermelho - fica ATRAS (zIndex menor) */}
       <View 
-        className="absolute right-0 top-0 bottom-0 w-full bg-[#C62828] flex-row items-center justify-end pr-6"
-        style={{ zIndex: 1 }}
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: "100%",
+          backgroundColor: "#C62828",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          paddingRight: 24,
+          zIndex: 1,
+        }}
       >
-        <Ionicons name="trash-outline" size={28} color="white" />
+        <Ionicons name="trash-outline" size={24} color="white" />
       </View>
 
-      {/* conteudo swipeable */}
+      {/* conteudo - fica NA FRENTE (zIndex maior) */}
       <Animated.View
         style={{ 
-          transform: [{ translateX }], 
+          transform: [{ translateX }],
           zIndex: 2,
-          height: itemHeight,
+          backgroundColor: !notification.read ? "#E8F5E9" : "white",
         }}
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
           onPress={handlePress}
           activeOpacity={0.7}
-          className={`flex-row items-center px-4 h-full border-b border-[#E8F5E9] ${
-            !notification.read ? "bg-[#E8F5E9]" : "bg-white"
-          }`}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: "#E8F5E9",
+          }}
         >
           {/* avatar */}
-          <View className="relative">
+          <View style={{ position: "relative" }}>
             {notification.from?.ProfilePicture ? (
               <Image
                 source={{ uri: notification.from.ProfilePicture }}
-                className="w-12 h-12 rounded-full"
+                style={{ width: 48, height: 48, borderRadius: 24 }}
               />
             ) : (
-              <View className="w-12 h-12 rounded-full bg-[#3A6604] justify-center items-center">
-                <Text className="text-white font-bold text-lg">
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#3A6604", justifyContent: "center", alignItems: "center" }}>
+                <Text style={{ color: "white", fontWeight: "bold", fontSize: 18 }}>
                   {notification.from?.Username?.charAt(0).toUpperCase()}
                 </Text>
               </View>
             )}
-            {/* badge de icone */}
-            <View className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white justify-center items-center border border-[#E8F5E9]">
+            <View style={{
+              position: "absolute",
+              bottom: -2,
+              right: -2,
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: "white",
+              justifyContent: "center",
+              alignItems: "center",
+              borderWidth: 2,
+              borderColor: "#E8F5E9",
+            }}>
               <Ionicons name={getIconName()} size={11} color={getIconColor()} />
             </View>
           </View>
 
           {/* texto */}
-          <View className="flex-1 ml-3 mr-2">
-            <Text className="text-[#1a1a1a] text-[14px] leading-[20px]" numberOfLines={2}>
-              <Text className="font-bold text-[#3A6604]">{displayName}</Text>
-              <Text className="text-[#1a1a1a]"> {getNotificationText()}</Text>
+          <View style={{ flex: 1, marginLeft: 12, marginRight: 8 }}>
+            <Text style={{ color: "#1a1a1a", fontSize: 14, lineHeight: 20 }} numberOfLines={2}>
+              <Text style={{ fontWeight: "bold", color: "#3A6604" }}>{displayName}</Text>
+              <Text style={{ color: "#1a1a1a" }}> {getNotificationText()}</Text>
             </Text>
-            <Text className="text-[#65B307] text-[12px] mt-1 font-medium">
+            <Text style={{ color: "#65B307", fontSize: 12, marginTop: 4, fontWeight: "500" }}>
               {formatTimeAgo(notification.createdAt)}
             </Text>
           </View>
 
-          {/* lado direito - seguir ou ponto */}
+          {/* lado direito */}
           {notification.type === "follow" && !isOwnProfile ? (
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
                 router.push(`/profile/${notification.from.Username}` as any);
               }}
-              className="px-4 py-1.5 bg-[#65B307] rounded-full"
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 6,
+                backgroundColor: "#65B307",
+                borderRadius: 999,
+              }}
             >
-              <Text className="text-white font-bold text-[12px]">Seguir</Text>
+              <Text style={{ color: "white", fontWeight: "bold", fontSize: 12 }}>Seguir</Text>
             </TouchableOpacity>
           ) : !notification.read ? (
-            <View className="w-2.5 h-2.5 rounded-full bg-[#65B307]" />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#65B307" }} />
           ) : null}
         </TouchableOpacity>
       </Animated.View>
