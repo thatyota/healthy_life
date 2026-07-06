@@ -5,7 +5,7 @@ import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/post.route.js";
 import commentRoutes from  "./routes/comment.route.js";
 import notificationRoutes from "./routes/notification.route.js"
-
+import authRoutes from "./routes/auth.route.js"; // ← NOVO
 
 import { ENV } from "./config/env.js";
 import {  connectdb } from "./config/db.js";
@@ -23,20 +23,19 @@ app.get("/",(req,res) => res.send("Hello from server "))
 app.use("/api/users",userRoutes);
 app.use("/api/posts",postRoutes);
 app.use("/api/comments", commentRoutes);
-app.use("/api/notifications", notificationRoutes)
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/auth", authRoutes); // ← NOVO
 
-//error handling middleware
 //error handling middleware
 app.use((err, req, res, next) => {
     console.error("Unhandled error:", err);
     res.status(500).json({error: err.message || "Internal server error"});
 });
+
 const startserver = async () => {
   try{
    await connectdb();
-    
 
-    //listen for local development
     if(ENV.NODE_ENV !=="production") {
       app.listen(ENV.PORT, () => console.log("Server is up and running on PORT:", ENV.PORT));
     }
@@ -45,13 +44,8 @@ const startserver = async () => {
      console.error("Failed to connect to server", error.message || error); 
      process.exit(1);
   }
-  
-   
 };
 
 startserver();
 
-
-//export for vercel
-export default app 
-//asd
+export default app;
