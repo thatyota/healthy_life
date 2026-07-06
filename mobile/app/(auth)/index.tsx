@@ -16,7 +16,7 @@ import { useSignIn, useSignUp, useAuth, useOAuth } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useApiClient } from "../../utils/api";
+import { useApiClient } from "../../utils/api";  // ✅ CORRIGIDO: path do teu hook
 import type { AxiosInstance } from "axios";
 
 // === TIPOS ===
@@ -43,9 +43,13 @@ export default function AuthScreen() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminFirstName, setAdminFirstName] = useState("");
   const [adminLastName, setAdminLastName] = useState("");
-  const [adminUsername, setAdminUsername] = useState("");
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
+
+  // NOVO: Estados para verificação de email OTP
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [pendingSignUp, setPendingSignUp] = useState<any>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const apiClient: AxiosInstance = useApiClient();
@@ -55,6 +59,13 @@ export default function AuthScreen() {
   const { signOut } = useAuth();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
+
+  // === GERAR USERNAME AUTOMÁTICO ===
+  const generateUsername = (userEmail: string): string => {
+    const base = userEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    const timestamp = Date.now().toString(36).slice(-4);
+    return `${base}${timestamp}`;
+  };
 
   // === REDIRECIONAR COM BASE NO ROLE ===
   const redirectByRole = useCallback(async () => {
@@ -102,7 +113,7 @@ export default function AuthScreen() {
     }
   }, [apiClient]);
 
-  // === VERIFICAR CODIGO ADMIN (BACKEND + FALLBACK LOCAL) ===
+  // === VERIFICAR CODIGO ADMIN ===
   const verifyAdminCode = async () => {
     if (!adminCode.trim()) {
       Alert.alert("Erro", "Insere o código de administrador");
@@ -111,7 +122,6 @@ export default function AuthScreen() {
 
     setVerifyingCode(true);
     try {
-      // Tenta verificar no backend primeiro
       const response = await apiClient.post("/auth/verify-admin", {
         adminCode: adminCode.trim(),
       });
@@ -121,13 +131,10 @@ export default function AuthScreen() {
         return;
       }
     } catch (error: any) {
-      console.log("Backend não disponível ou rota não encontrada, usando fallback local");
+      console.log("Backend não disponível, usando fallback local");
 
-      // FALLBACK: Se backend não tem a rota (404), verifica localmente
-      // ⚠️ EM PRODUÇÃO: Remover isto e usar apenas backend!
       if (error?.response?.status === 404) {
-        // Código hardcoded para teste (deve ser igual ao .env do backend)
-        const LOCAL_ADMIN_CODE = "ADMINADMIN123"; // Muda para o teu código!
+        const LOCAL_ADMIN_CODE = "ADMINADMIN123";
 
         if (adminCode.trim() === LOCAL_ADMIN_CODE) {
           setAdminCodeVerified(true);
@@ -251,20 +258,29 @@ export default function AuthScreen() {
   // === REGISTO ADMIN ===
   const handleAdminRegister = async () => {
     if (!signUpLoaded || !signUp) return;
-    if (!adminEmail.trim() || !adminPassword.trim() || !adminFirstName.trim() || !adminLastName.trim() || !adminUsername.trim()) {
+    if (!adminEmail.trim() || !adminPassword.trim() || !adminFirstName.trim() || !adminLastName.trim()) {
       Alert.alert("Erro", "Preenche todos os campos");
       return;
     }
+
+    const generatedUsername = generateUsername(adminEmail.trim());
+    console.log("🔍 Username gerado:", generatedUsername);
+
     setIsLoading(true);
     try {
-      const result = await signUp.create({
+      const signUpData: any = {
         emailAddress: adminEmail.trim(),
         password: adminPassword.trim(),
         firstName: adminFirstName.trim(),
         lastName: adminLastName.trim(),
-        username: adminUsername.trim(),
         unsafeMetadata: { adminCode: adminCode.trim() },
-      });
+      };
+
+      console.log("🔍 Dados do signUp:", JSON.stringify(signUpData, null, 2));
+
+      const result = await signUp.create(signUpData);
+      console.log("🔍 Resultado signUp:", result.status);
+
       if (result.status === "complete") {
         if (setSignUpActive) {
           await setSignUpActive({ session: result.createdSessionId });
@@ -275,7 +291,7 @@ export default function AuthScreen() {
             adminEmail.trim(),
             adminFirstName.trim(),
             adminLastName.trim(),
-            adminUsername.trim(),
+            generatedUsername,
             "admin",
             adminCode.trim()
           );
@@ -284,14 +300,68 @@ export default function AuthScreen() {
         resetAdminForm();
         router.replace("/(admin)");
       } else if (result.status === "missing_requirements") {
+        // Guarda o signUp para usar na verificação
+        setPendingSignUp(signUp);
+        setPendingVerification(true);
         await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-        Alert.alert("Verificação", "Código enviado para o email!");
+        Alert.alert("Verificação", "Código enviado para o email! Insere o código abaixo.");
       }
     } catch (err: any) {
-      if (err.message?.includes("inválido")) {
-        await signOut();
+      console.error("❌ Erro:", err);
+      let errorMsg = err.errors?.[0]?.message || err.message || "Erro no registo admin";
+      Alert.alert("Erro", errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // === NOVO: VERIFICAR CÓDIGO OTP ===
+  const handleVerifyOTP = async () => {
+    if (!verificationCode.trim()) {
+      Alert.alert("Erro", "Insere o código de verificação");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await pendingSignUp.attemptEmailAddressVerification({
+        code: verificationCode.trim(),
+      });
+
+      console.log("🔍 Resultado verificação:", result.status);
+
+      if (result.status === "complete") {
+        if (setSignUpActive) {
+          await setSignUpActive({ session: result.createdSessionId });
+        }
+
+        const generatedUsername = generateUsername(adminEmail.trim());
+
+        if (result.createdUserId) {
+          await syncUser(
+            result.createdUserId,
+            adminEmail.trim(),
+            adminFirstName.trim(),
+            adminLastName.trim(),
+            generatedUsername,
+            "admin",
+            adminCode.trim()
+          );
+        }
+
+        // Reset estados
+        setPendingVerification(false);
+        setVerificationCode("");
+        setPendingSignUp(null);
+        setAdminModalVisible(false);
+        resetAdminForm();
+        router.replace("/(admin)");
+      } else {
+        Alert.alert("Erro", "Código inválido. Tenta novamente.");
       }
-      Alert.alert("Erro", err.errors?.[0]?.message || err.message || "Erro no registo admin");
+    } catch (err: any) {
+      console.error("❌ Erro verificação:", err);
+      Alert.alert("Erro", err.errors?.[0]?.message || "Código inválido");
     } finally {
       setIsLoading(false);
     }
@@ -351,9 +421,11 @@ export default function AuthScreen() {
     setAdminPassword("");
     setAdminFirstName("");
     setAdminLastName("");
-    setAdminUsername("");
     setAdminSubMode("login");
     setShowAdminPassword(false);
+    setPendingVerification(false);
+    setVerificationCode("");
+    setPendingSignUp(null);
   };
 
   const handleSubmit = () => {
@@ -693,6 +765,73 @@ export default function AuthScreen() {
                       )}
                     </TouchableOpacity>
                   </View>
+                ) : pendingVerification ? (
+                  // === NOVO: TELA DE VERIFICAÇÃO OTP ===
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: "#486623",
+                        marginBottom: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      Código enviado para
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: "#3A6604",
+                        marginBottom: 16,
+                        textAlign: "center",
+                      }}
+                    >
+                      {adminEmail}
+                    </Text>
+
+                    {renderInput("mail", "Código de verificação", verificationCode, setVerificationCode, {
+                      keyboardType: "number-pad",
+                      highlight: true,
+                    })}
+
+                    <TouchableOpacity
+                      onPress={handleVerifyOTP}
+                      disabled={isLoading}
+                      style={{
+                        backgroundColor: "#3A6604",
+                        borderRadius: 16,
+                        paddingVertical: 16,
+                        alignItems: "center",
+                        marginTop: 8,
+                        opacity: isLoading ? 0.7 : 1,
+                      }}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <Text style={{ color: "#FFFFFF", fontWeight: "bold", fontSize: 16 }}>
+                          Verificar Código
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setPendingVerification(false);
+                        setVerificationCode("");
+                      }}
+                      style={{
+                        alignItems: "center",
+                        marginTop: 16,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#8DA87A", fontSize: 14 }}>
+                        Voltar ao registo
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View>
                     <View
@@ -731,10 +870,6 @@ export default function AuthScreen() {
                       ))}
                     </View>
 
-                    {adminSubMode === "register" &&
-                      renderInput("at-sign", "Username", adminUsername, setAdminUsername, {
-                        autoCapitalize: "none",
-                      })}
                     {adminSubMode === "register" &&
                       renderInput("user", "Primeiro nome", adminFirstName, setAdminFirstName, {
                         autoCapitalize: "words",
