@@ -28,6 +28,7 @@ export default function UserProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [currentMongoId, setCurrentMongoId] = useState<string | null>(null);
 
   const fetchProfile = async () => {
     try {
@@ -58,9 +59,33 @@ export default function UserProfileScreen() {
     setLoading(false);
   };
 
+  // Busca o MongoDB _id do user logado
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await api.get("/users/me");
+        const mongoId = response?.data?.user?._id;
+        setCurrentMongoId(mongoId);
+      } catch {
+        setCurrentMongoId(null);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
+
   useEffect(() => {
     loadAll();
   }, [username]);
+
+  // Verifica se o user logado está a seguir o perfil visitado
+  useEffect(() => {
+    if (user && currentMongoId) {
+      const isUserFollowing = user.Followers?.some(
+        (follower: any) => follower.toString() === currentMongoId.toString()
+      );
+      setIsFollowing(!!isUserFollowing);
+    }
+  }, [user, currentMongoId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -79,8 +104,10 @@ export default function UserProfileScreen() {
         },
       });
       if (response.ok) {
+        // Atualiza o estado local imediatamente
         setIsFollowing(!isFollowing);
-        fetchProfile();
+        // Atualiza o perfil para ter os dados mais recentes
+        await fetchProfile();
       }
     } catch (error) {
       console.error(error);

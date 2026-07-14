@@ -63,53 +63,5 @@ export default function AdminLayout() {
   }
 
   // renderiza o stack do painel admin
-  return (
-    <Stack>
-      <Stack.Screen
-        name="index"
-        options={{
-          title: "Painel Admin",
-          headerStyle: { backgroundColor: headerBg },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
-        }}
-      />
-      <Stack.Screen
-        name="users"
-        options={{
-          title: "Utilizadores",
-          headerStyle: { backgroundColor: headerBg },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
-        }}
-      />
-      <Stack.Screen
-        name="posts"
-        options={{
-          title: "Publicacoes",
-          headerStyle: { backgroundColor: headerBg },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
-        }}
-      />
-      <Stack.Screen
-        name="comments"
-        options={{
-          title: "Comentarios",
-          headerStyle: { backgroundColor: headerBg },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
-        }}
-      />
-      <Stack.Screen
-        name="moderation"
-        options={{
-          title: "Moderacao",
-          headerStyle: { backgroundColor: headerBg },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
-        }}
-      />
-    </Stack>
-  );
+  
 }
