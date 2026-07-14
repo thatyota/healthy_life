@@ -1,6 +1,7 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { requireAdmin } from "../middleware/admin.middleware.js";
+import User from "../models/user.model.js";
 import {
   checkAdmin,
   getAllUsers,
@@ -21,6 +22,40 @@ const router = express.Router();
 // O protectRoute verifica o token, mas nao bloqueia se nao for admin
 // =============================================================================
 router.get("/check", protectRoute, checkAdmin);
+
+// =============================================================================
+// Rota /make-admin — SEM requireAdmin (qualquer user logado pode tornar-se admin)
+// Usada quando o user faz login/registo na area de admin
+// =============================================================================
+router.post("/make-admin", protectRoute, async (req, res) => {
+  try {
+    const clerkId = req.auth.userId;
+
+    const user = await User.findOneAndUpdate(
+      { clerkId },
+      { role: "admin" },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "User nao encontrado" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "User promovido a admin", 
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        Username: user.Username,
+      }
+    });
+  } catch (error) {
+    console.error("Erro make-admin:", error);
+    res.status(500).json({ error: "Erro interno" });
+  }
+});
 
 // =============================================================================
 // Todas as rotas abaixo precisam de admin
