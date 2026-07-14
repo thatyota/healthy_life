@@ -1,327 +1,389 @@
-// importa os hooks do React para estado e efeitos
-import { useEffect, useState } from "react";
-// importa os componentes do React Native para a UI
 import {
     View,
     Text,
-    ScrollView,
+    Image,
     TouchableOpacity,
+    ScrollView,
     ActivityIndicator,
+    RefreshControl,
+    Modal,
+    Alert,
+    Switch,
 } from "react-native";
-// importa o useApiClient para fazer chamadas ao backend
-import { useApiClient } from "../../utils/api";
-// importa o useAuth do Clerk para verificar autenticacao
-import { useAuth } from "@clerk/clerk-expo";
-// importa o useRouter para navegacao
-import { useRouter } from "expo-router";
-// importa o Feather para icones
-import { Feather } from "@expo/vector-icons";
-// importa o SafeAreaView para respeitar as areas seguras
+import { useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-// importa o useTheme para tema e idioma
+import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserPosts } from "@/hooks/useUserPosts";
+import { useSignOut } from "@/hooks/useSignOut";
+import { useDeleteAccount } from "@/hooks/useDeleteAccount";
+import ProfilePostCard from "@/components/ProfilePostCard";
+import EditProfileModal from "@/components/EditProfileModal";
 import { useTheme } from "../context/ThemeContext";
 
 /**
- * AdminTab — painel de administracao dentro dos tabs
+ * ProfileScreen — ecra de perfil do user logado
  *
- * Este ecra mostra as funcionalidades de administracao do app.
- * So e acessivel atraves do tab Admin (que so aparece para admins).
- *
- * Funcionalidades:
- * - Ver total de users registados
- * - Ver total de reports pendentes
- * - Gerir users (lista, banir, promover a admin)
- * - Ver reports de users (posts/comentarios reportados)
+ * Mostra os dados do user (nome, bio, foto, banner, followers, following),
+ * os posts do user, e um modal de definicoes com tema e idioma.
  */
-export default function AdminTab() {
-    // router e usado para navegar entre ecras
-    const router = useRouter();
-    // api e o client axios configurado com o token do Clerk
-    const api = useApiClient();
-    // isSignedIn vem do Clerk — true se o user esta logado
-    const { isSignedIn } = useAuth();
+export default function ProfileScreen() {
+    const { data: user, isLoading: userLoading, error: userError, refetch: refetchUser } = useCurrentUser();
+    const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useUserPosts(user?.Username || "");
+    const { handleSignOut } = useSignOut();
+    const deleteAccount = useDeleteAccount();
+    const { darkMode, toggleDarkMode, language, setLanguage } = useTheme();
 
-    // darkMode e language vem do ThemeContext
-    const { darkMode, language } = useTheme();
+    const [refreshing, setRefreshing] = useState(false);
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [settingsVisible, setSettingsVisible] = useState(false);
 
-    // loading indica se os dados estao a carregar
-    const [loading, setLoading] = useState(true);
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await Promise.all([refetchUser(), refetchPosts()]);
+        setRefreshing(false);
+    }, [refetchUser, refetchPosts]);
 
-    // totalUsers guarda o numero total de users no app
-    const [totalUsers, setTotalUsers] = useState(0);
-    // totalReports guarda o numero de reports pendentes
-    const [totalReports, setTotalReports] = useState(0);
+    const changeLanguage = (langCode: "pt" | "en") => {
+        setLanguage(langCode);
+    };
 
-    // isAdmin verifica se o user tem role admin no MongoDB
-    const [isAdmin, setIsAdmin] = useState(false);
+    const handleLogout = () => {
+        Alert.alert(lang.sair, lang.confirmSair, [
+            { text: lang.cancelar, style: "cancel" },
+            { text: lang.sair, style: "destructive", onPress: () => { setSettingsVisible(false); handleSignOut(); } },
+        ]);
+    };
 
-    // traducoes
+    const handleDeleteAccountPress = () => {
+        Alert.alert(lang.deletar, lang.confirmDeletar, [
+            { text: lang.cancelar, style: "cancel" },
+            { text: lang.deletar, style: "destructive", onPress: () => { setSettingsVisible(false); deleteAccount.mutate(); } },
+        ]);
+    };
+
     const t = {
         pt: {
-            painelAdmin: "Painel Admin",
-            estatisticas: "Estatisticas",
-            acoesRapidas: "Acoes Rapidas",
-            gerirUsers: "Gerir Users",
-            verReports: "Ver Reports",
-            acessoNegado: "Acesso negado — so admins podem ver este ecra",
-            carregando: "A carregar painel admin...",
-            users: "Users",
-            reports: "Reports",
+            perfil: "Perfil",
+            editarPerfil: "Editar perfil",
+            receitas: "Receitas",
+            seguidores: "Seguidores",
+            aSeguir: "A seguir",
+            minhasReceitas: "Minhas Receitas",
+            semReceitas: "Ainda nao ha receitas",
+            partilhaPrimeira: "Partilha a tua primeira receita saudavel!",
+            definicoes: "Definicoes",
+            idioma: "Idioma",
+            conta: "Conta",
+            sair: "Sair da conta",
+            deletar: "Deletar conta",
+            confirmSair: "Tens a certeza que queres sair?",
+            confirmDeletar: "Esta acao e irreversivel. Todos os teus dados serao eliminados permanentemente.",
+            cancelar: "Cancelar",
+            tema: "Modo Escuro",
+            aparencia: "APARENCIA",
+            carregando: "A carregar...",
+            erro: "Erro",
+            erroCarregar: "Erro ao carregar",
+            tentarNovamente: "Tentar novamente",
         },
         en: {
-            painelAdmin: "Admin Panel",
-            estatisticas: "Statistics",
-            acoesRapidas: "Quick Actions",
-            gerirUsers: "Manage Users",
-            verReports: "View Reports",
-            acessoNegado: "Access denied — only admins can view this screen",
-            carregando: "Loading admin panel...",
-            users: "Users",
-            reports: "Reports",
+            perfil: "Profile",
+            editarPerfil: "Edit profile",
+            receitas: "Recipes",
+            seguidores: "Followers",
+            aSeguir: "Following",
+            minhasReceitas: "My Recipes",
+            semReceitas: "No recipes yet",
+            partilhaPrimeira: "Share your first healthy recipe!",
+            definicoes: "Settings",
+            idioma: "Language",
+            conta: "Account",
+            sair: "Sign out",
+            deletar: "Delete account",
+            confirmSair: "Are you sure you want to sign out?",
+            confirmDeletar: "This action is irreversible. All your data will be permanently deleted.",
+            cancelar: "Cancel",
+            tema: "Dark Mode",
+            aparencia: "APPEARANCE",
+            carregando: "Loading...",
+            erro: "Error",
+            erroCarregar: "Error loading",
+            tentarNovamente: "Try again",
         },
     };
 
     const lang = t[language];
 
-    // cores do tema — verdes escuros em vez de preto
-    // quando darkMode e true, usa verdes escuros e musgo
-    // quando darkMode e false, usa os verdes claros normais
+    // =============================================================================
+    // TEMA — Paleta de cores suave e agradavel
+    // =============================================================================
+    // O tema escuro usa verdes suaves em vez de preto/verde musgo pesado.
+    // Inspirado no tema claro mas com tons mais profundos e acolhedores.
+    //
+    // Fundo: verde muito escuro mas suave (quase preto-verde)
+    // Cards: verde escuro com leve transparencia
+    // Texto: verde lima claro e branco esverdeado
+    // Bordas: verde musgo suave
+    // Acentos: verde lima brilhante
+    // =============================================================================
+
     const theme = {
-        // cor de fundo principal do ecra
-        // dark: verde musgo muito escuro | light: verde claro padrao
-        bg: darkMode ? "#1a2f0a" : "#F1F8E9",
-        // cor de fundo dos cards e componentes
-        // dark: verde floresta escuro | light: branco
-        cardBg: darkMode ? "#2d4a1e" : "#FFFFFF",
-        // cor do texto principal (titulos)
-        // dark: verde lima claro | light: verde escuro padrao
-        text: darkMode ? "#a8e063" : "#3A6604",
-        // cor do texto secundario
-        // dark: verde musgo claro | light: verde medio
-        textSecondary: darkMode ? "#7cb342" : "#486623",
-        // cor do texto do corpo
-        // dark: branco esverdeado | light: preto
-        textBody: darkMode ? "#dcedc8" : "#1a1a1a",
-        // cor da borda
-        // dark: verde escuro | light: verde claro
-        border: darkMode ? "#3e5f23" : "#C8E6C9",
-        // cor do loading
-        // dark: verde lima | light: verde padrao
-        loading: darkMode ? "#8bc34a" : "#65B307",
-        // cor de fundo do empty state
-        // dark: verde escuro | light: verde muito claro
-        emptyBg: darkMode ? "#2d4a1e" : "#E8F5E9",
-        // cor de fundo dos cards de estatistica
-        statCardBg: darkMode ? "#2d4a1e" : "#FFFFFF",
-        // cor do texto dos valores
-        statText: darkMode ? "#FFFFFF" : "#333333",
-        // cor do texto dos labels
-        statLabel: darkMode ? "#aed581" : "#666666",
-        // cor de fundo dos botoes de acao
-        actionBg: darkMode ? "#2d4a1e" : "#FFFFFF",
-        // cor do texto dos botoes
-        actionText: darkMode ? "#dcedc8" : "#333333",
-        // cor da seta dos botoes
-        actionArrow: darkMode ? "#7cb342" : "#999999",
+        // Fundo principal — verde muito escuro, quase preto-verde
+        // Mas suave, nao aquele verde musgo pesado de antes
+        bg: darkMode ? "#0f1f0f" : "#F1F8E9",
+
+        // Fundo dos cards — verde escuro suave com leve transparencia
+        cardBg: darkMode ? "#1a2e1a" : "#FFFFFF",
+
+        // Fundo do header — um pouco mais claro que o fundo para destacar
+        headerBg: darkMode ? "#162616" : "#FFFFFF",
+
+        // Texto principal — verde lima claro e suave
+        text: darkMode ? "#a3d977" : "#3A6604",
+
+        // Texto secundario — verde musgo claro
+        textSecondary: darkMode ? "#7a9e5c" : "#486623",
+
+        // Texto do corpo/bio — branco esverdeado suave
+        textBody: darkMode ? "#c8ddb8" : "#1a1a1a",
+
+        // Texto muted — verde acinzentado suave
+        textMuted: darkMode ? "#5a7a4a" : "#666666",
+
+        // Bordas — verde musgo suave
+        border: darkMode ? "#2a4a2a" : "#C8E6C9",
+
+        // Banner vazio — verde escuro suave
+        banner: darkMode ? "#1a301a" : "#C8E6C9",
+
+        // Avatar vazio
+        avatarBg: "#3A6604",
+
+        // Separador
+        separator: darkMode ? "#1e351e" : "#E8F5E9",
+
+        // Loading — verde lima brilhante
+        loading: darkMode ? "#7bc043" : "#65B307",
+
+        // Erro
+        error: "#e57373",
+        errorBg: darkMode ? "#3a1e1e" : "#FFEBEE",
+
+        // Botoes
+        buttonBg: darkMode ? "#4a8a3a" : "#65B307",
+        buttonText: "#FFFFFF",
+
+        // Modal
+        modalBg: darkMode ? "#1a2e1a" : "#FFFFFF",
+        modalOverlay: "rgba(0,0,0,0.6)",
+
+        // Switch
+        switchTrackActive: "#4a8a3a",
+        switchTrackInactive: darkMode ? "#2a4a2a" : "#C8E6C9",
+
+        // Idioma selecionado
+        langSelectedBg: darkMode ? "#2a4a2a" : "#E8F5E9",
+        langSelectedBorder: darkMode ? "#5a8a4a" : "#65B307",
+        langSelectedText: darkMode ? "#a3d977" : "#3A6604",
+        langUnselectedText: darkMode ? "#6a9a5a" : "#486623",
+
+        // Logout
+        logoutBg: darkMode ? "#3a2e1a" : "#FFF3E0",
+        logoutText: "#e6a050",
+
+        // Delete
+        deleteBg: darkMode ? "#3a1e1e" : "#FFEBEE",
+        deleteText: "#e57373",
+
+        // Empty state
+        emptyBg: darkMode ? "#1e351e" : "#E8F5E9",
+        emptyIcon: darkMode ? "#5a8a4a" : "#65B307",
     };
 
-    /**
-     * useEffect que busca os dados do admin ao montar o componente
-     *
-     * 1. Verifica se o user esta logado
-     * 2. Verifica se o user e admin (GET /users/me)
-     * 3. Se nao for admin, redireciona para o feed
-     * 4. Se for admin, busca o total de users e reports
-     */
-    useEffect(() => {
-        const loadAdminData = async () => {
-            try {
-                // verifica se o user esta logado
-                if (!isSignedIn) return;
-
-                // busca o documento do user para verificar o role
-                const userResponse = await api.get("/users/me");
-                const role = userResponse?.data?.user?.role;
-
-                // se o role nao for "admin", redireciona para o feed
-                if (role !== "admin") {
-                    setIsAdmin(false);
-                    router.replace("/(tabs)");
-                    return;
-                }
-
-                // o user e admin
-                setIsAdmin(true);
-
-                // busca as estatisticas do admin
-                try {
-                    const statsResponse = await api.get("/admin/stats");
-                    const stats = statsResponse.data?.stats || {};
-                    setTotalUsers(stats.totalUsers || 0);
-                    setTotalReports(stats.totalReports || 0);
-                } catch (e) {
-                    // se /admin/stats falhar, tenta buscar users e reports separadamente
-                    try {
-                        const usersResponse = await api.get("/admin/users");
-                        const users = usersResponse.data?.users || [];
-                        setTotalUsers(users.length);
-                    } catch (e2) {
-                        setTotalUsers(0);
-                    }
-                    setTotalReports(0);
-                }
-
-            } catch (error) {
-                console.error("Erro ao carregar dados admin:", error);
-            } finally {
-                // desativa o loading sempre que termina
-                setLoading(false);
-            }
-        };
-
-        loadAdminData();
-    }, [isSignedIn, api, router]);
-
-    // se esta a carregar, mostra spinner
-    if (loading) {
+    if (userLoading) {
         return (
             <SafeAreaView className="flex-1 justify-center items-center" style={{ backgroundColor: theme.bg }}>
                 <ActivityIndicator size="large" color={theme.loading} />
-                <Text className="mt-4 font-medium" style={{ color: theme.text }}>
-                    {lang.carregando}
-                </Text>
+                <Text className="mt-3" style={{ color: theme.textSecondary }}>{lang.carregando}</Text>
             </SafeAreaView>
         );
     }
 
-    // se nao e admin, mostra mensagem
-    if (!isAdmin) {
+    if (userError || !user) {
         return (
-            <SafeAreaView className="flex-1 justify-center items-center" style={{ backgroundColor: theme.bg }}>
-                <Text className="text-lg" style={{ color: theme.textSecondary }}>{lang.acessoNegado}</Text>
+            <SafeAreaView className="flex-1 justify-center items-center px-6" style={{ backgroundColor: theme.bg }}>
+                <View className="w-16 h-16 rounded-full justify-center items-center mb-4" style={{ backgroundColor: theme.errorBg }}>
+                    <Ionicons name="warning-outline" size={32} color={theme.error} />
+                </View>
+                <Text className="font-bold text-lg" style={{ color: theme.error }}>{lang.erro}</Text>
+                <Text className="text-sm text-center mt-2" style={{ color: theme.textSecondary }}>{userError?.message || lang.erroCarregar}</Text>
+                <TouchableOpacity onPress={() => refetchUser()} className="mt-4 px-6 py-2 rounded-full" style={{ backgroundColor: theme.buttonBg }}>
+                    <Text className="font-bold" style={{ color: theme.buttonText }}>{lang.tentarNovamente}</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         );
     }
+
+    const displayName = `${user.FirstName || ""} ${user.LastName || ""}`.trim() || user.Username;
+    const postsCount = posts?.length || 0;
+    const followersCount = user.Followers?.length || 0;
+    const followingCount = user.Following?.length || 0;
 
     return (
         <SafeAreaView className="flex-1" style={{ backgroundColor: theme.bg }}>
-            <ScrollView className="flex-1 px-4 pt-4">
-                {/* Titulo do painel */}
-                <Text className="text-2xl font-bold mb-6" style={{ color: theme.text }}>
-                    {lang.painelAdmin}
-                </Text>
+            {/* Header */}
+            <View className="flex-row justify-between items-center px-4 py-3 border-b" style={{ backgroundColor: theme.headerBg, borderColor: theme.border }}>
+                <Text className="text-xl font-bold" style={{ color: theme.text }}>{lang.perfil}</Text>
+                <TouchableOpacity onPress={() => setSettingsVisible(true)} activeOpacity={0.7}>
+                    <Ionicons name="settings-outline" size={24} color={theme.text} />
+                </TouchableOpacity>
+            </View>
 
-                {/* Seccao de estatisticas */}
-                <Text className="text-lg font-semibold mb-3" style={{ color: theme.textBody }}>
-                    {lang.estatisticas}
-                </Text>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.loading} colors={[theme.loading]} />
+                }
+            >
+                {/* Banner */}
+                {user.bannerImage ? (
+                    <Image source={{ uri: user.bannerImage }} className="w-full h-32" />
+                ) : (
+                    <View className="w-full h-32" style={{ backgroundColor: theme.banner }} />
+                )}
 
-                {/* Cards de estatisticas em grid de 2 colunas */}
-                <View className="flex-row flex-wrap justify-between mb-6">
-                    {/* Card de Users */}
-                    <StatCard
-                        icon="users"
-                        label={lang.users}
-                        value={totalUsers}
-                        color="#3A6604"
-                        theme={theme}
-                    />
-                    {/* Card de Reports */}
-                    <StatCard
-                        icon="flag"
-                        label={lang.reports}
-                        value={totalReports}
-                        color="#F44336"
-                        theme={theme}
-                    />
+                {/* Avatar & Edit Button */}
+                <View className="px-4 -mt-10 flex-row justify-between items-end">
+                    {user.ProfilePicture ? (
+                        <Image source={{ uri: user.ProfilePicture }} className="w-20 h-20 rounded-full border-4" style={{ borderColor: theme.cardBg }} />
+                    ) : (
+                        <View className="w-20 h-20 rounded-full border-4 justify-center items-center" style={{ backgroundColor: theme.avatarBg, borderColor: theme.cardBg }}>
+                            <Text className="text-white text-2xl font-bold">{user.Username?.charAt(0).toUpperCase()}</Text>
+                        </View>
+                    )}
+                    <TouchableOpacity onPress={() => setEditModalVisible(true)} className="px-5 py-2 rounded-full border" style={{ backgroundColor: theme.cardBg, borderColor: theme.loading }}>
+                        <Text className="font-bold text-sm" style={{ color: theme.text }}>{lang.editarPerfil}</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Seccao de acoes rapidas */}
-                <Text className="text-lg font-semibold mb-3" style={{ color: theme.textBody }}>
-                    {lang.acoesRapidas}
-                </Text>
+                {/* Info */}
+                <View className="px-4 mt-3">
+                    <Text className="font-bold text-xl" style={{ color: theme.text }}>{displayName}</Text>
+                    <Text style={{ color: theme.textSecondary }}>@{user.Username}</Text>
+                    {user.bio ? <Text className="mt-2 text-[15px]" style={{ color: theme.textBody }}>{user.bio}</Text> : null}
+                    {user.location ? (
+                        <View className="flex-row items-center mt-2">
+                            <Feather name="map-pin" size={14} color={theme.loading} />
+                            <Text className="ml-1 text-sm" style={{ color: theme.textSecondary }}>{user.location}</Text>
+                        </View>
+                    ) : null}
 
-                {/* Botao para gerir users */}
-                <ActionButton
-                    icon="users"
-                    label={lang.gerirUsers}
-                    onPress={() => {/* navegar para ecra de users */}}
-                    theme={theme}
-                />
-                {/* Botao para ver reports */}
-                <ActionButton
-                    icon="flag"
-                    label={lang.verReports}
-                    onPress={() => {/* navegar para ecra de reports */}}
-                    theme={theme}
-                />
+                    <View className="flex-row mt-4 gap-6">
+                        <View className="items-center">
+                            <Text className="font-bold text-lg" style={{ color: theme.text }}>{postsCount}</Text>
+                            <Text className="text-sm" style={{ color: theme.textSecondary }}>{lang.receitas}</Text>
+                        </View>
+                        <TouchableOpacity className="items-center">
+                            <Text className="font-bold text-lg" style={{ color: theme.text }}>{followersCount}</Text>
+                            <Text className="text-sm" style={{ color: theme.textSecondary }}>{lang.seguidores}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity className="items-center">
+                            <Text className="font-bold text-lg" style={{ color: theme.text }}>{followingCount}</Text>
+                            <Text className="text-sm" style={{ color: theme.textSecondary }}>{lang.aSeguir}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Separador */}
+                <View className="h-2 mt-4" style={{ backgroundColor: theme.separator }} />
+
+                {/* Posts */}
+                <View className="flex-row items-center px-4 py-3">
+                    <Ionicons name="restaurant-outline" size={18} color={theme.text} />
+                    <Text className="font-bold text-lg ml-2" style={{ color: theme.text }}>{lang.minhasReceitas}</Text>
+                </View>
+
+                {postsLoading && !posts ? (
+                    <View className="py-10 justify-center items-center">
+                        <ActivityIndicator size="large" color={theme.loading} />
+                    </View>
+                ) : posts && posts.length > 0 ? (
+                    posts.map((post: any) => <ProfilePostCard key={post._id} post={post} isOwnProfile={true} />)
+                ) : (
+                    <View className="py-20 justify-center items-center px-6">
+                        <View className="w-20 h-20 rounded-full justify-center items-center mb-4" style={{ backgroundColor: theme.emptyBg }}>
+                            <Ionicons name="restaurant-outline" size={40} color={theme.emptyIcon} />
+                        </View>
+                        <Text className="font-bold text-lg" style={{ color: theme.text }}>{lang.semReceitas}</Text>
+                        <Text className="text-base mt-2 text-center" style={{ color: theme.textSecondary }}>{lang.partilhaPrimeira}</Text>
+                    </View>
+                )}
             </ScrollView>
+
+            <EditProfileModal visible={editModalVisible} onClose={() => setEditModalVisible(false)} user={user} />
+
+            {/* Settings Modal */}
+            <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>
+                <View className="flex-1 justify-end" style={{ backgroundColor: theme.modalOverlay }}>
+                    <View className="rounded-t-3xl px-4 pt-6 pb-10" style={{ backgroundColor: theme.modalBg }}>
+                        <View className="flex-row justify-between items-center mb-6">
+                            <Text className="text-xl font-bold" style={{ color: theme.text }}>{lang.definicoes}</Text>
+                            <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                                <Ionicons name="close" size={28} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text className="text-sm font-semibold uppercase mb-3" style={{ color: theme.textSecondary }}>{lang.aparencia}</Text>
+                        <View className="flex-row items-center justify-between p-4 rounded-xl border mb-6" style={{ backgroundColor: theme.cardBg, borderColor: theme.border }}>
+                            <View className="flex-row items-center">
+                                <Ionicons name={darkMode ? "moon" : "sunny"} size={22} color={theme.text} />
+                                <Text className="ml-3 font-medium" style={{ color: theme.textBody }}>{lang.tema}</Text>
+                            </View>
+                            <Switch
+                                value={darkMode}
+                                onValueChange={toggleDarkMode}
+                                trackColor={{ false: theme.switchTrackInactive, true: theme.switchTrackActive }}
+                                thumbColor="#fff"
+                            />
+                        </View>
+
+                        <Text className="text-sm font-semibold uppercase mb-3" style={{ color: theme.textSecondary }}>{lang.idioma}</Text>
+                        <View className="flex-row gap-3 mb-6">
+                            <TouchableOpacity
+                                onPress={() => changeLanguage("pt")}
+                                className="flex-1 py-3 rounded-xl items-center border"
+                                style={{
+                                    backgroundColor: language === "pt" ? theme.langSelectedBg : theme.cardBg,
+                                    borderColor: language === "pt" ? theme.langSelectedBorder : theme.border,
+                                }}
+                            >
+                                <Text className="font-bold" style={{ color: language === "pt" ? theme.langSelectedText : theme.langUnselectedText }}>Portugues</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => changeLanguage("en")}
+                                className="flex-1 py-3 rounded-xl items-center border"
+                                style={{
+                                    backgroundColor: language === "en" ? theme.langSelectedBg : theme.cardBg,
+                                    borderColor: language === "en" ? theme.langSelectedBorder : theme.border,
+                                }}
+                            >
+                                <Text className="font-bold" style={{ color: language === "en" ? theme.langSelectedText : theme.langUnselectedText }}>English</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text className="text-sm font-semibold uppercase mb-3" style={{ color: theme.textSecondary }}>{lang.conta}</Text>
+                        <TouchableOpacity onPress={handleLogout} className="flex-row items-center py-4 px-4 rounded-xl mb-3" style={{ backgroundColor: theme.logoutBg }}>
+                            <MaterialIcons name="logout" size={22} color={theme.logoutText} />
+                            <Text className="font-bold ml-3 text-[15px]" style={{ color: theme.logoutText }}>{lang.sair}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleDeleteAccountPress} className="flex-row items-center py-4 px-4 rounded-xl" style={{ backgroundColor: theme.deleteBg }}>
+                            <MaterialIcons name="delete-forever" size={22} color={theme.deleteText} />
+                            <Text className="font-bold ml-3 text-[15px]" style={{ color: theme.deleteText }}>{lang.deletar}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
-    );
-}
-
-/**
- * StatCard — componente que mostra uma estatistica num card
- *
- * Recebe o icone, label, valor, cor e tema para renderizar um card visual.
- */
-function StatCard({
-    icon,
-    label,
-    value,
-    color,
-    theme,
-}: {
-    icon: string;
-    label: string;
-    value: number;
-    color: string;
-    theme: any;
-}) {
-    return (
-        <View
-            className="w-[48%] rounded-xl p-4 mb-3 shadow-sm"
-            style={{ backgroundColor: theme.statCardBg, elevation: 2 }}
-        >
-            <Feather name={icon as any} size={24} color={color} />
-            <Text className="text-2xl font-bold mt-2" style={{ color: theme.statText }}>
-                {value}
-            </Text>
-            <Text className="text-sm mt-1" style={{ color: theme.statLabel }}>
-                {label}
-            </Text>
-        </View>
-    );
-}
-
-/**
- * ActionButton — botao de acao para o painel admin
- *
- * Recebe o icone, label, funcao onPress e tema.
- * Renderiza um botao clicavel com icone e texto.
- */
-function ActionButton({
-    icon,
-    label,
-    onPress,
-    theme,
-}: {
-    icon: string;
-    label: string;
-    onPress: () => void;
-    theme: any;
-}) {
-    return (
-        <TouchableOpacity
-            onPress={onPress}
-            className="rounded-xl p-4 mb-3 flex-row items-center shadow-sm"
-            style={{ backgroundColor: theme.actionBg, elevation: 2 }}
-        >
-            <Feather name={icon as any} size={20} color="#3A6604" />
-            <Text className="font-medium ml-3 flex-1" style={{ color: theme.actionText }}>
-                {label}
-            </Text>
-            <Feather name="chevron-right" size={20} color={theme.actionArrow} />
-        </TouchableOpacity>
     );
 }

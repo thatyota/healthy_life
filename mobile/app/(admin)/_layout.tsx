@@ -10,8 +10,8 @@ import { useTheme } from "../context/ThemeContext";
 // Admin Layout — Stack Navigator
 // =============================================================================
 // Verifica se o user esta logado e se tem role "admin".
+// Usa /admin/check (mais leve) em vez de /users/me para evitar rate limit.
 // Se nao for admin, redireciona para o feed normal.
-// Se for admin, renderiza o Stack com os ecras do painel.
 // =============================================================================
 
 export default function AdminLayout() {
@@ -35,21 +35,16 @@ export default function AdminLayout() {
       return;
     }
 
-    // verifica se o user tem role admin no backend
+    // verifica se o user e admin usando /admin/check (mais leve que /users/me)
     const checkAdmin = async () => {
       try {
-        // busca o user atual no backend para obter o role
-        const response = await apiClient.get("/users/me");
-        // extrai o role do documento do MongoDB
-        const role = response?.data?.user?.role;
+        const response = await apiClient.get("/admin/check");
+        const isAdmin = response?.data?.isAdmin === true;
 
-        // se o role nao for admin, redireciona para o feed normal
-        if (role !== "admin") {
+        if (!isAdmin) {
           router.replace("/(tabs)");
         }
-        // se for admin, fica no painel (nao faz nada)
       } catch (error) {
-        // se der erro ao buscar o user, loga e manda para o feed
         console.error("Erro ao verificar admin:", error);
         router.replace("/(tabs)");
       }

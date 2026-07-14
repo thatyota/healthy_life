@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,9 +46,9 @@ export default function AdminDashboard() {
       posts: "Publicacoes",
       comments: "Comentarios",
       reports: "Denuncias",
-      acessoNegado: "Acesso negado — so admins podem ver este ecra",
-      carregando: "A carregar painel admin...",
-      resumo: "Aqui podes gerir utilizadores, publicacoes, comentarios e ver logs de moderacao. Tudo isto so e acessivel se o user tiver role: 'admin'.",
+      acessoNegado: "Acesso negado",
+      carregando: "A carregar...",
+      resumo: "Aqui podes gerir utilizadores, publicacoes, comentarios e ver logs de moderacao.",
     },
     en: {
       painelAdmin: "Admin Panel",
@@ -62,45 +63,40 @@ export default function AdminDashboard() {
       posts: "Posts",
       comments: "Comments",
       reports: "Reports",
-      acessoNegado: "Access denied — only admins can view this screen",
-      carregando: "Loading admin panel...",
-      resumo: "Here you can manage users, posts, comments and view moderation logs. This is only accessible if the user has role: 'admin'.",
+      acessoNegado: "Access denied",
+      carregando: "Loading...",
+      resumo: "Here you can manage users, posts, comments and view moderation logs.",
     },
   };
 
   const lang = t[language];
 
-  // Cores do tema — verdes escuros em vez de preto
+  // =============================================================================
+  // TEMA — Paleta suave e agradavel (igual ao profile)
+  // =============================================================================
   const theme = {
-    bg: darkMode ? "#1a2f0a" : "#F1F8E9",
-    cardBg: darkMode ? "#2d4a1e" : "#FFFFFF",
-    headerBg: darkMode ? "#2d4a1e" : "#3A6604",
-    textMain: darkMode ? "#a8e063" : "#3A6604",
-    textBody: darkMode ? "#dcedc8" : "#1B1B1B",
-    textMuted: darkMode ? "#7cb342" : "#666666",
+    bg: darkMode ? "#0f1f0f" : "#F1F8E9",
+    cardBg: darkMode ? "#1a2e1a" : "#FFFFFF",
+    headerBg: darkMode ? "#162616" : "#3A6604",
+    textMain: darkMode ? "#a3d977" : "#3A6604",
+    textBody: darkMode ? "#c8ddb8" : "#1B1B1B",
+    textMuted: darkMode ? "#5a7a4a" : "#666666",
     textWhite: "#FFFFFF",
-    border: darkMode ? "#3e5f23" : "#C8E6C9",
-    loading: darkMode ? "#8bc34a" : "#65B307",
-    accent: "#8bc34a",
-    danger: "#C62828",
+    border: darkMode ? "#2a4a2a" : "#C8E6C9",
+    loading: darkMode ? "#7bc043" : "#65B307",
+    accent: darkMode ? "#7bc043" : "#8bc34a",
+    danger: "#e57373",
   };
 
-  /**
-   * Busca os dados do admin ao montar o componente
-   * 1. Verifica se o user esta logado
-   * 2. Verifica se e admin (GET /users/me)
-   * 3. Se for admin, busca estatisticas
-   */
   useEffect(() => {
     const loadAdminData = async () => {
       if (!isLoaded || !isSignedIn) return;
 
       try {
-        // Verifica se o user e admin
-        const userResponse = await api.get("/users/me");
-        const role = userResponse?.data?.user?.role;
+        const checkRes = await api.get("/admin/check");
+        const adminStatus = checkRes.data?.isAdmin === true;
 
-        if (role !== "admin") {
+        if (!adminStatus) {
           setIsAdmin(false);
           router.replace("/(tabs)");
           return;
@@ -108,7 +104,6 @@ export default function AdminDashboard() {
 
         setIsAdmin(true);
 
-        // Busca estatisticas
         try {
           const statsRes = await api.get("/admin/stats");
           const stats = statsRes.data;
@@ -117,7 +112,6 @@ export default function AdminDashboard() {
           setTotalComments(stats.comments || 0);
           setTotalReports(stats.reports || 0);
         } catch (e) {
-          // Se /admin/stats falhar, tenta buscar separadamente
           try {
             const usersRes = await api.get("/admin/users");
             setTotalUsers(usersRes.data?.users?.length || 0);
@@ -134,6 +128,7 @@ export default function AdminDashboard() {
         }
       } catch (error) {
         console.error("Erro ao carregar dados admin:", error);
+        setIsAdmin(false);
       } finally {
         setLoading(false);
       }
@@ -142,7 +137,6 @@ export default function AdminDashboard() {
     loadAdminData();
   }, [isLoaded, isSignedIn, api, router]);
 
-  // Loading
   if (loading || !isLoaded) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}>
@@ -154,7 +148,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // Acesso negado
   if (!isAdmin) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}>
@@ -166,15 +159,13 @@ export default function AdminDashboard() {
     );
   }
 
-  // Cards de estatisticas
   const stats = [
-    { icon: "people", label: lang.users, value: totalUsers, color: "#8bc34a" },
-    { icon: "newspaper", label: lang.posts, value: totalPosts, color: "#7cb342" },
-    { icon: "chatbubbles", label: lang.comments, value: totalComments, color: "#689f38" },
-    { icon: "flag", label: lang.reports, value: totalReports, color: "#C62828", alert: totalReports > 0 },
+    { icon: "people", label: lang.users, value: totalUsers, color: "#7bc043" },
+    { icon: "newspaper", label: lang.posts, value: totalPosts, color: "#6ab04a" },
+    { icon: "chatbubbles", label: lang.comments, value: totalComments, color: "#5a9e3a" },
+    { icon: "flag", label: lang.reports, value: totalReports, color: "#e57373", alert: totalReports > 0 },
   ];
 
-  // Cards de acao
   const actions = [
     { icon: "people", label: lang.gerirUsers, route: "/(admin)/users" },
     { icon: "newspaper", label: lang.gerirPosts, route: "/(admin)/posts" },
