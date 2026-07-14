@@ -91,8 +91,12 @@ export const useCurrentUser = () => {
 };
 
 // ─── HOOK: useUpdateProfile ──────────────────────────────
-// Atualiza o perfil do user logado (nome, bio, foto, etc.)
+// Atualiza o perfil do user logado (nome, bio, foto, banner, etc.)
 // Usa useMutation porque altera dados no servidor (POST/PUT)
+//
+// CORRECAO: Suporta tanto JSON (texto) como FormData (com imagens)
+// Quando envia FormData, o api.ts remove o Content-Type para o axios
+// definir automaticamente "multipart/form-data" com o boundary correto.
 export const useUpdateProfile = () => {
   // api = cliente HTTP para fazer pedidos ao backend
   const api = useApiClient();
@@ -106,8 +110,11 @@ export const useUpdateProfile = () => {
   return useMutation({
     // mutationFn = função que faz o pedido de atualização
     // Recebe os dados a atualizar (ex: { FirstName: "Novo", bio: "Nova bio" })
+    // ou um FormData quando envia imagens (ProfilePicture, bannerImage)
     mutationFn: async (data: any) => {
-      // Faz o pedido POST/PUT ao backend: /api/users/profile
+      // Faz o pedido PUT ao backend: /api/users/profile
+      // Se data for FormData, o axios envia como multipart/form-data
+      // Se data for objeto, o axios envia como application/json
       const response = await userApi.updateProfile(api, data);
       return response.data;  // devolve os dados atualizados
     },

@@ -5,7 +5,7 @@ const API_BASE_URL = "https://healthy-life-sable.vercel.app/api";
 // importa o useAuth do Clerk para obter o token JWT do user logado
 import { useAuth } from "@clerk/clerk-expo";
 // importa o axios para fazer chamadas HTTP ao backend
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 
 /**
  * createApiClient — cria um client axios configurado com interceptores
@@ -24,7 +24,7 @@ export const createApiClient = (getToken: () => Promise<string | null>): AxiosIn
 
   // interceptor de request: corre ANTES de cada chamada HTTP
   // adiciona o token JWT no header Authorization
-  api.interceptors.request.use(async (config) => {
+  api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     // busca o token do Clerk (token JWT assinado pelo Clerk)
     // este token contem o clerkId do user e expira em 60 segundos
     const token = await getToken();
@@ -33,6 +33,24 @@ export const createApiClient = (getToken: () => Promise<string | null>): AxiosIn
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // ============================================
+    // CORRECAO: FormData e Content-Type
+    // ============================================
+    // Quando enviamos FormData (para upload de imagens),
+    // o axios DEVE definir o Content-Type como "multipart/form-data"
+    // com o boundary correto.
+    //
+    // Se definirmos Content-Type manualmente como "multipart/form-data",
+    // o axios nao consegue calcular o boundary e o backend nao consegue
+    // processar o FormData.
+    //
+    // SOLUCAO: Se o data for FormData, NAO definimos Content-Type.
+    // O axios faz isso automaticamente com o boundary correto.
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
+
     // retorna a config modificada para o axios continuar o request
     return config;
   });
@@ -91,6 +109,7 @@ export const userApi = {
 
   // updateProfile: atualiza os dados do perfil do user
   // recebe um objeto com os campos a atualizar (bio, location, etc.)
+  // ou um FormData quando envia imagens (ProfilePicture, bannerImage)
   updateProfile: (api: AxiosInstance, data: any) => api.put("/users/profile", data),
 };
 

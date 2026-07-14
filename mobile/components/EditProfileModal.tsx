@@ -17,10 +17,6 @@ import * as ImagePicker from "expo-image-picker";
 // ============================================
 // PROPS do componente
 // ============================================
-// visible = se o modal esta aberto
-// onClose = funcao para fechar o modal
-// onSuccess = funcao que o parent chama quando o update tem sucesso (para atualizar o perfil)
-// user = dados atuais do user (para preencher os campos)
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -31,26 +27,15 @@ interface Props {
 // ============================================
 // COMPONENTE: EditProfileModal
 // ============================================
-// Modal para editar o perfil do user (nome, bio, foto, banner, localizacao)
 export default function EditProfileModal({ visible, onClose, onSuccess, user }: Props) {
-  // ----------------------------------------
-  // ESTADO LOCAL
-  // ----------------------------------------
   const [firstName, setFirstName] = useState(user.FirstName || "");
   const [lastName, setLastName] = useState(user.LastName || "");
   const [bio, setBio] = useState(user.bio || "");
   const [location, setLocation] = useState(user.location || "");
-  // profileImage = URI da nova foto escolhida (null se nao escolheu nova)
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  // bannerImage = URI da nova banner escolhida (null se nao escolheu nova)
   const [bannerImage, setBannerImage] = useState<string | null>(null);
-  // updateMutation = hook para fazer o update no backend
   const updateMutation = useUpdateProfile();
 
-  // ----------------------------------------
-  // FUNCAO: pickImage
-  // ----------------------------------------
-  // Abre a galeria para escolher uma imagem (perfil ou banner)
   const pickImage = async (type: "profile" | "banner") => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -68,13 +53,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
     }
   };
 
-  // ----------------------------------------
-  // FUNCAO: handleSave
-  // ----------------------------------------
-  // Guarda as alteracoes no backend
-  // Envia os dados como FormData (para suportar upload de imagens)
   const handleSave = () => {
-    // Verifica se houve alguma alteracao (texto ou imagens)
     const hasTextChanges =
       firstName !== user.FirstName ||
       lastName !== user.LastName ||
@@ -83,24 +62,18 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
 
     const hasImageChanges = profileImage !== null || bannerImage !== null;
 
-    // Se nao houve alteracoes → fecha sem fazer nada
     if (!hasTextChanges && !hasImageChanges) {
       onClose();
       return;
     }
 
-    // Cria um FormData para enviar dados + ficheiros
-    // O FormData e necessario porque vamos enviar imagens (ficheiros)
-    // JSON nao suporta ficheiros, so FormData
     const formData = new FormData();
 
-    // Adiciona os campos de texto ao FormData
     if (firstName !== user.FirstName) formData.append("FirstName", firstName);
     if (lastName !== user.LastName) formData.append("LastName", lastName);
     if (bio !== user.bio) formData.append("bio", bio);
     if (location !== user.location) formData.append("location", location);
 
-    // Se escolheu uma nova foto de perfil → adiciona ao FormData
     if (profileImage) {
       const filename = profileImage.split("/").pop() || "profile.jpg";
       const match = /\.([a-zA-Z]+)$/.exec(filename);
@@ -113,7 +86,6 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
       } as any);
     }
 
-    // Se escolheu uma nova banner → adiciona ao FormData
     if (bannerImage) {
       const filename = bannerImage.split("/").pop() || "banner.jpg";
       const match = /\.([a-zA-Z]+)$/.exec(filename);
@@ -126,15 +98,24 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
       } as any);
     }
 
-    // Chama o hook useUpdateProfile com o FormData
     updateMutation.mutate(formData, {
       onSuccess: () => {
         Alert.alert("Sucesso", "Perfil atualizado!");
         onSuccess?.();
         onClose();
       },
-      onError: () => {
-        Alert.alert("Erro", "Nao foi possivel atualizar o perfil.");
+      // onError AGORA mostra o erro real no console e no alert
+      onError: (error: any) => {
+        // Log detalhado do erro para debug
+        console.error("=== ERRO AO ATUALIZAR PERFIL ===");
+        console.error("Status:", error?.response?.status);
+        console.error("Data:", JSON.stringify(error?.response?.data));
+        console.error("Message:", error?.message);
+        console.error("==================================");
+
+        // Mostra o erro real ao user
+        const errorMessage = error?.response?.data?.error || error?.response?.data?.message || "Erro desconhecido";
+        Alert.alert("Erro", `Nao foi possivel atualizar o perfil.\n\nDetalhes: ${errorMessage}`);
       },
     });
   };
