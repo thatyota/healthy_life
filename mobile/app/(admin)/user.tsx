@@ -1,43 +1,124 @@
-import React from "react";
+import React, { useState } from "react";
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator,
-  RefreshControl, Alert,
+  View, Text, FlatList, TouchableOpacity,
+  ActivityIndicator, Alert, RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAdminUsers, useBanUser, useUnbanUser, useTimeoutUser } from "../../hooks/useAdmin";
+import { useTheme } from "../context/ThemeContext";
 
 // =============================================================================
-// Admin - Gestao de Utilizadores
+// Admin Users — Gestao de Utilizadores
 // =============================================================================
-// Lista todos os utilizadores da app com opcoes de gestao
-// Usa hooks do useAdmin.ts para buscar e manipular dados
+// Lista todos os utilizadores da app com opcoes de gestao.
+// Usa hooks do useAdmin.ts para buscar e manipular dados.
+// O admin pode: banir, desbanir, ou dar timeout num user.
 // =============================================================================
 
 export default function AdminUsers() {
+  const { darkMode, language } = useTheme();
+
   // Step 1: Busca users via hook
   const { data, isLoading, refetch } = useAdminUsers();
   const users = data?.users || [];
 
   // Step 2: Hooks de mutacao
+  // useBanUser espera: { userId: string; reason?: string }
   const banUser = useBanUser();
+  // useUnbanUser espera: string (userId)
   const unbanUser = useUnbanUser();
+  // useTimeoutUser espera: { userId: string; duration: number; reason?: string }
   const timeoutUser = useTimeoutUser();
 
+  // Traducoes
+  const t = {
+    pt: {
+      titulo: "Utilizadores",
+      registados: "registados",
+      banir: "Banir",
+      desbanir: "Desbanir",
+      timeout: "Timeout",
+      confirmarBan: "Queres banir este utilizador?",
+      confirmarUnban: "Queres desbanir este utilizador?",
+      confirmarTimeout: "Queres dar timeout (7 dias) neste utilizador?",
+      nenhum: "Nenhum utilizador encontrado.",
+      admin: "admin",
+      user: "user",
+      banido: "banido",
+      ativo: "ativo",
+    },
+    en: {
+      titulo: "Users",
+      registados: "registered",
+      banir: "Ban",
+      desbanir: "Unban",
+      timeout: "Timeout",
+      confirmarBan: "Do you want to ban this user?",
+      confirmarUnban: "Do you want to unban this user?",
+      confirmarTimeout: "Do you want to timeout (7 days) this user?",
+      nenhum: "No users found.",
+      admin: "admin",
+      user: "user",
+      banido: "banned",
+      ativo: "active",
+    },
+  };
+
+  const lang = t[language];
+
+  // Cores do tema
+  const theme = {
+    bg: darkMode ? "#1a2f0a" : "#F1F8E9",
+    cardBg: darkMode ? "#2d4a1e" : "#FFFFFF",
+    headerBg: darkMode ? "#2d4a1e" : "#3A6604",
+    textMain: darkMode ? "#a8e063" : "#3A6604",
+    textBody: darkMode ? "#dcedc8" : "#1B1B1B",
+    textMuted: darkMode ? "#7cb342" : "#666666",
+    textWhite: "#FFFFFF",
+    border: darkMode ? "#3e5f23" : "#C8E6C9",
+    accent: "#8bc34a",
+    danger: "#C62828",
+    success: "#2E7D32",
+    warning: "#FFB74D",
+  };
+
   // Step 3: Toggle ban/unban
+  // useBanUser espera objeto: { userId: string; reason?: string }
+  // useUnbanUser espera string: userId
   const handleToggleBan = (userId: string, isBanned: boolean) => {
     Alert.alert(
       "Confirmar",
-      isBanned ? "Queres desbanir este utilizador?" : "Queres banir este utilizador?",
+      isBanned ? lang.confirmarUnban : lang.confirmarBan,
       [
         { text: "Cancelar", style: "cancel" },
         {
           text: "Confirmar",
           onPress: () => {
             if (isBanned) {
+              // unbanUser aceita string diretamente
               unbanUser.mutate(userId);
             } else {
-              banUser.mutate(userId);
+              // banUser aceita objeto com userId
+              banUser.mutate({ userId });
             }
+          },
+        },
+      ]
+    );
+  };
+
+  // Timeout — useTimeoutUser espera objeto: { userId, duration, reason? }
+  const handleTimeout = (userId: string) => {
+    Alert.alert(
+      "Confirmar",
+      lang.confirmarTimeout,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          onPress: () => {
+            timeoutUser.mutate({ userId, duration: 7 });
           },
         },
       ]
@@ -46,63 +127,94 @@ export default function AdminUsers() {
 
   // Step 4: Render item
   const renderUser = ({ item }: { item: any }) => (
-    <View className="bg-white rounded-2xl p-4 mb-3 mx-6 shadow-sm border border-[#3A6604]/10 flex-row items-center">
-      <View className="w-12 h-12 rounded-full bg-[#E8F5E9] justify-center items-center mr-4">
-        <Text className="text-[#3A6604] font-bold text-lg">
+    <View
+      style={{
+        backgroundColor: theme.cardBg,
+        borderRadius: 16,
+        padding: 16,
+        marginHorizontal: 24,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        flexDirection: "row",
+        alignItems: "center",
+      }}
+    >
+      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.accent + "20", justifyContent: "center", alignItems: "center", marginRight: 14 }}>
+        <Text style={{ color: theme.textMain, fontWeight: "bold", fontSize: 18 }}>
           {(item.name || item.Username || "?").charAt(0).toUpperCase()}
         </Text>
       </View>
-      <View className="flex-1">
-        <Text className="text-base font-bold text-[#1B1B1B]">
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.textBody, fontSize: 15, fontWeight: "bold" }}>
           {item.name || `${item.FirstName} ${item.LastName}` || item.Username}
         </Text>
-        <Text className="text-sm text-[#666]">{item.email || item.email}</Text>
-        <View className="flex-row mt-1">
+        <Text style={{ color: theme.textMuted, fontSize: 13 }}>{item.email}</Text>
+        <View style={{ flexDirection: "row", marginTop: 6 }}>
           <View
-            className="px-2 py-0.5 rounded-full mr-2"
             style={{
-              backgroundColor: item.role === "admin" ? "#3A6604" : "#E8F5E9",
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 12,
+              backgroundColor: item.role === "admin" ? theme.accent : theme.accent + "20",
+              marginRight: 6,
             }}
           >
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: item.role === "admin" ? "#fff" : "#3A6604" }}
-            >
-              {item.role || "user"}
+            <Text style={{ color: item.role === "admin" ? "#1a2f0a" : theme.accent, fontSize: 11, fontWeight: "600" }}>
+              {item.role === "admin" ? lang.admin : lang.user}
             </Text>
           </View>
           <View
-            className="px-2 py-0.5 rounded-full"
             style={{
-              backgroundColor: item.isBanned ? "#FFEBEE" : "#E8F5E9",
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 12,
+              backgroundColor: item.isBanned ? theme.danger + "20" : theme.success + "20",
             }}
           >
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: item.isBanned ? "#C62828" : "#2E7D32" }}
-            >
-              {item.isBanned ? "banido" : "ativo"}
+            <Text style={{ color: item.isBanned ? theme.danger : theme.success, fontSize: 11, fontWeight: "600" }}>
+              {item.isBanned ? lang.banido : lang.ativo}
             </Text>
           </View>
         </View>
       </View>
-      <TouchableOpacity onPress={() => handleToggleBan(item._id || item.id, item.isBanned)}>
-        <Ionicons
-          name={item.isBanned ? "checkmark-circle-outline" : "ban-outline"}
-          size={24}
-          color={item.isBanned ? "#2E7D32" : "#C62828"}
-        />
-      </TouchableOpacity>
+
+      {/* Botoes de acao */}
+      <View style={{ flexDirection: "row" }}>
+        {/* Timeout (so se nao estiver banido) */}
+        {!item.isBanned && (
+          <TouchableOpacity
+            onPress={() => handleTimeout(item._id || item.id)}
+            style={{ marginRight: 8, padding: 6 }}
+          >
+            <Ionicons name="time-outline" size={22} color={theme.warning} />
+          </TouchableOpacity>
+        )}
+
+        {/* Ban/Unban */}
+        <TouchableOpacity
+          onPress={() => handleToggleBan(item._id || item.id, item.isBanned)}
+          style={{ padding: 6 }}
+        >
+          <Ionicons
+            name={item.isBanned ? "checkmark-circle-outline" : "ban-outline"}
+            size={26}
+            color={item.isBanned ? theme.success : theme.danger}
+          />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   return (
-    <View className="flex-1 bg-[#F1F8E9]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       {/* Stats topo */}
-      <View className="bg-[#3A6604] px-6 pt-6 pb-8 rounded-b-[32px]">
-        <Text className="text-white text-2xl font-bold">Utilizadores</Text>
-        <Text className="text-white/80 text-base mt-1">
-          {users.length} registados
+      <View style={{ backgroundColor: theme.headerBg, paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
+        <Text style={{ color: theme.textWhite, fontSize: 24, fontWeight: "bold" }}>
+          {lang.titulo}
+        </Text>
+        <Text style={{ color: theme.textWhite, fontSize: 14, marginTop: 4, opacity: 0.8 }}>
+          {users.length} {lang.registados}
         </Text>
       </View>
 
@@ -113,15 +225,15 @@ export default function AdminUsers() {
         keyExtractor={(item) => item._id || item.id}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 }}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#3A6604" />
+          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={theme.accent} />
         }
         ListEmptyComponent={
-          <View className="items-center mt-12">
-            <Ionicons name="people-outline" size={48} color="#3A6604" />
-            <Text className="text-[#666] mt-4">Nenhum utilizador encontrado.</Text>
+          <View style={{ alignItems: "center", marginTop: 48 }}>
+            <Ionicons name="people-outline" size={48} color={theme.textMuted} />
+            <Text style={{ color: theme.textMuted, marginTop: 12 }}>{lang.nenhum}</Text>
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }

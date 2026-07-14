@@ -5,7 +5,9 @@ import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/post.route.js";
 import commentRoutes from  "./routes/comment.route.js";
 import notificationRoutes from "./routes/notification.route.js"
-import authRoutes from "./routes/auth.route.js"; // ← NOVO
+import authRoutes from "./routes/auth.route.js";
+import adminRoutes from "./routes/admin.route.js";
+import reportRoutes from "./routes/report.route.js"; // ← NOVO: denuncias
 
 import { ENV } from "./config/env.js";
 import {  connectdb } from "./config/db.js";
@@ -24,7 +26,9 @@ app.use("/api/users",userRoutes);
 app.use("/api/posts",postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/notifications", notificationRoutes);
-app.use("/api/auth", authRoutes); // ← NOVO
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/reports", reportRoutes); // ← NOVO: rotas de denuncias
 
 //error handling middleware
 app.use((err, req, res, next) => {

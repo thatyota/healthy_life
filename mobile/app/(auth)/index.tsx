@@ -16,7 +16,7 @@ import {
   import { router } from "expo-router";
   import { Feather, Ionicons } from "@expo/vector-icons";
   import { SafeAreaView } from "react-native-safe-area-context";
-  import { useApiClient } from "../../utils/api";  // ✅ CORRIGIDO: path do teu hook
+  import { useApiClient } from "../../utils/api";  // path do teu hook
   import type { AxiosInstance } from "axios";
 
   // === TIPOS ===
@@ -46,12 +46,10 @@ import {
     const [showAdminPassword, setShowAdminPassword] = useState(false);
     const [verifyingCode, setVerifyingCode] = useState(false);
 
-    // NOVO: Estados para verificação de email OTP
     const [pendingVerification, setPendingVerification] = useState(false);
     const [verificationCode, setVerificationCode] = useState("");
     const [pendingSignUp, setPendingSignUp] = useState<any>(null);
 
-    // NOVO: Estados para mensagens de erro do código admin
     const [codeError, setCodeError] = useState("");
     const [codeAttempts, setCodeAttempts] = useState(0);
     const [codeInputError, setCodeInputError] = useState(false);
@@ -66,41 +64,53 @@ import {
     const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
 
     // === GERAR USERNAME AUTOMÁTICO ===
+    // gera um username unico a partir do email
     const generateUsername = (userEmail: string): string => {
+      // pega a parte antes do @ e remove caracteres especiais
       const base = userEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+      // adiciona 4 caracteres do timestamp para garantir unicidade
       const timestamp = Date.now().toString(36).slice(-4);
       return `${base}${timestamp}`;
     };
 
     // === REDIRECIONAR COM BASE NO ROLE ===
+    // funcao que verifica o role do user e redireciona para a rota correta
     const redirectByRole = useCallback(async () => {
       try {
+        // aguarda 500ms para o Clerk atualizar a sessao
         await new Promise((r) => setTimeout(r, 500));
-        const response = await apiClient.get("/auth/me");
+        // busca o user atual no backend para obter o role
+        const response = await apiClient.get("/users/me");
+        // extrai o role da resposta, default "user" se nao existir
         const userRole = response?.data?.user?.role || "user";
 
+        // se o role for admin, vai para o painel admin
         if (userRole === "admin") {
           router.replace("/(admin)");
         } else {
+          // senao, vai para o feed normal
           router.replace("/(tabs)");
         }
       } catch (error: any) {
+        // se der erro, loga e manda para o feed
         console.error("Erro ao verificar role:", error);
         router.replace("/(tabs)");
       }
     }, [apiClient]);
 
     // === SYNC USER ===
+    // sincroniza o user no backend (cria ou atualiza no MongoDB)
     const syncUser = useCallback(async (
-      clerkId: string,
-      userEmail: string,
-      userFirstName: string,
-      userLastName: string,
-      userUsername: string,
-      userRole: string,
-      code?: string
+      clerkId: string,         // id do user no Clerk
+      userEmail: string,        // email do user
+      userFirstName: string,    // primeiro nome
+      userLastName: string,     // ultimo nome
+      userUsername: string,     // username gerado
+      userRole: string,         // role: "user" ou "admin"
+      code?: string             // codigo admin (opcional, so para registo admin)
     ) => {
       try {
+        // envia os dados para o backend sincronizar
         await apiClient.post("/auth/sync", {
           clerkId,
           email: userEmail,
@@ -112,6 +122,7 @@ import {
         });
       } catch (error: any) {
         console.error("Erro ao sync user:", error);
+        // se o erro for codigo invalido, lanca excecao para mostrar no frontend
         if (error?.response?.data?.error?.includes("inválido")) {
           throw new Error(error.response.data.error);
         }
@@ -119,25 +130,28 @@ import {
     }, [apiClient]);
 
     // === VERIFICAR CODIGO ADMIN ===
+    // verifica se o codigo de admin inserido e valido
     const verifyAdminCode = async () => {
-      // Limpar erro anterior
+      // limpa erro anterior
       setCodeError("");
       setCodeInputError(false);
 
+      // verifica se inseriu algum codigo
       if (!adminCode.trim()) {
-        setCodeError("⚠️ Insere o código de administrador");
+        setCodeError("Insere o código de administrador");
         setCodeInputError(true);
         return;
       }
 
       setVerifyingCode(true);
-      console.log("🔍 A verificar código:", adminCode.trim());
 
       try {
+        // envia o codigo para o backend verificar
         const response = await apiClient.post("/auth/verify-admin", {
           adminCode: adminCode.trim(),
         });
 
+        // se o backend confirmar que e valido, marca como verificado
         if (response?.data?.valid === true) {
           setAdminCodeVerified(true);
           setCodeError("");
@@ -146,11 +160,13 @@ import {
           return;
         }
       } catch (error: any) {
+        // se o backend nao responder, usa fallback local
         console.log("Backend não disponível, usando fallback local");
 
         if (error?.response?.status === 404) {
           const LOCAL_ADMIN_CODE = "ADMINADMIN123";
 
+          // verifica se o codigo corresponde ao local
           if (adminCode.trim() === LOCAL_ADMIN_CODE) {
             setAdminCodeVerified(true);
             setCodeError("");
@@ -165,17 +181,18 @@ import {
           }
         }
 
-        // Código está errado - mostrar mensagem progressiva
+        // codigo esta errado — incrementa tentativas
         const newAttempts = codeAttempts + 1;
         setCodeAttempts(newAttempts);
         setCodeInputError(true);
 
-        let errorMsg = "❌ Código incorreto. Tenta novamente.";
+        // mensagens de erro progressivas
+        let errorMsg = "Código incorreto. Tenta novamente.";
         if (newAttempts >= 3) {
-          errorMsg = "❌ Código incorreto. Verifica se escreveste bem ou contacta o suporte.";
+          errorMsg = "Código incorreto. Verifica se escreveste bem ou contacta o suporte.";
         }
         if (newAttempts >= 5) {
-          errorMsg = "❌ Muitas tentativas falhadas. Tenta mais tarde.";
+          errorMsg = "Muitas tentativas falhadas. Tenta mais tarde.";
         }
 
         setCodeError(errorMsg);
@@ -185,22 +202,28 @@ import {
     };
 
     // === LOGIN ===
+    // faz login com email e password
     const handleLogin = async () => {
+      // verifica se o signIn do Clerk esta carregado
       if (!signInLoaded || !signIn) return;
+      // verifica se preencheu email e password
       if (!email.trim() || !password.trim()) {
         Alert.alert("Erro", "Preenche email e password");
         return;
       }
       setIsLoading(true);
       try {
+        // cria a sessao de login no Clerk
         const result = await signIn.create({
           identifier: email.trim(),
           password: password.trim(),
         });
+        // se o login for completo, ativa a sessao
         if (result.status === "complete") {
           if (setSignInActive) {
             await setSignInActive({ session: result.createdSessionId });
           }
+          // redireciona com base no role
           await redirectByRole();
         } else {
           Alert.alert("Erro", "Login falhou. Verifica as credenciais.");
@@ -213,14 +236,18 @@ import {
     };
 
     // === REGISTO USER ===
+    // cria conta nova de user normal
     const handleRegister = async () => {
+      // verifica se o signUp do Clerk esta carregado
       if (!signUpLoaded || !signUp) return;
+      // verifica se preencheu todos os campos
       if (!email.trim() || !password.trim() || !firstName.trim() || !lastName.trim() || !username.trim()) {
         Alert.alert("Erro", "Preenche todos os campos");
         return;
       }
       setIsLoading(true);
       try {
+        // cria a conta no Clerk com os dados inseridos
         const result = await signUp.create({
           emailAddress: email.trim(),
           password: password.trim(),
@@ -228,11 +255,13 @@ import {
           lastName: lastName.trim(),
           username: username.trim(),
         });
+        // se o registo for completo, ativa a sessao e sincroniza
         if (result.status === "complete") {
           if (setSignUpActive) {
             await setSignUpActive({ session: result.createdSessionId });
           }
           if (result.createdUserId) {
+            // sincroniza no backend com role "user"
             await syncUser(
               result.createdUserId,
               email.trim(),
@@ -242,8 +271,10 @@ import {
               "user"
             );
           }
+          // vai para o feed normal
           router.replace("/(tabs)");
         } else if (result.status === "missing_requirements") {
+          // prepara verificacao por email se faltar requisitos
           await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
           Alert.alert("Verificação", "Código enviado para o email!");
         }
@@ -255,7 +286,6 @@ import {
     };
 
     // === LOGIN ADMIN ===
-    // ✅ CORRIGIDO: NÃO força admin no login — respeita o role do MongoDB
     // Se o user já é admin, vai para /(admin). Se não, vai para /(tabs).
     const handleAdminLogin = async () => {
       if (!signInLoaded || !signIn) return;
@@ -273,7 +303,6 @@ import {
           if (setSignInActive) {
             await setSignInActive({ session: result.createdSessionId });
           }
-          // ✅ NÃO chama /auth/make-admin aqui — respeita o role do MongoDB
           await redirectByRole();
         } else {
           Alert.alert("Erro", "Login falhou. Verifica as credenciais.");
@@ -286,7 +315,6 @@ import {
     };
 
     // === REGISTO ADMIN ===
-    // ✅ MANTÉM: Força admin no registo (quando cria conta nova na área de admin)
     const handleAdminRegister = async () => {
       if (!signUpLoaded || !signUp) return;
       if (!adminEmail.trim() || !adminPassword.trim() || !adminFirstName.trim() || !adminLastName.trim()) {
@@ -295,7 +323,7 @@ import {
       }
 
       const generatedUsername = generateUsername(adminEmail.trim());
-      console.log("🔍 Username gerado:", generatedUsername);
+      console.log("Username gerado:", generatedUsername);
 
       setIsLoading(true);
       try {
@@ -307,10 +335,10 @@ import {
           unsafeMetadata: { adminCode: adminCode.trim() },
         };
 
-        console.log("🔍 Dados do signUp:", JSON.stringify(signUpData, null, 2));
+        console.log("Dados do signUp:", JSON.stringify(signUpData, null, 2));
 
         const result = await signUp.create(signUpData);
-        console.log("🔍 Resultado signUp:", result.status);
+        console.log("Resultado signUp:", result.status);
 
         if (result.status === "complete") {
           if (setSignUpActive) {
@@ -328,12 +356,11 @@ import {
             );
           }
 
-          // ✅ FORÇAR ADMIN: Garante que o role é "admin" no backend
           try {
             const makeAdminRes = await apiClient.post("/auth/make-admin");
-            console.log("✅ Role forçado para admin:", makeAdminRes.data);
+            console.log(" Role forçado para admin:", makeAdminRes.data);
           } catch (e: any) {
-            console.error("❌ Erro ao forçar admin:", e?.response?.data || e.message);
+            console.error("Erro ao forçar admin:", e?.response?.data || e.message);
           }
 
           setAdminModalVisible(false);
@@ -347,7 +374,7 @@ import {
           Alert.alert("Verificação", "Código enviado para o email! Insere o código abaixo.");
         }
       } catch (err: any) {
-        console.error("❌ Erro:", err);
+        console.error("Erro:", err);
         let errorMsg = err.errors?.[0]?.message || err.message || "Erro no registo admin";
         Alert.alert("Erro", errorMsg);
       } finally {
@@ -355,7 +382,7 @@ import {
       }
     };
 
-    // === NOVO: VERIFICAR CÓDIGO OTP ===
+    // === VERIFICAR CÓDIGO OTP ===
     const handleVerifyOTP = async () => {
       if (!verificationCode.trim()) {
         Alert.alert("Erro", "Insere o código de verificação");
@@ -368,7 +395,7 @@ import {
           code: verificationCode.trim(),
         });
 
-        console.log("🔍 Resultado verificação:", result.status);
+        console.log("Resultado verificação:", result.status);
 
         if (result.status === "complete") {
           if (setSignUpActive) {
@@ -389,12 +416,11 @@ import {
             );
           }
 
-          // ✅ FORÇAR ADMIN: Também após verificação OTP
           try {
             const makeAdminRes = await apiClient.post("/auth/make-admin");
-            console.log("✅ Role forçado para admin (OTP):", makeAdminRes.data);
+            console.log(" Role forçado para admin (OTP):", makeAdminRes.data);
           } catch (e: any) {
-            console.error("❌ Erro ao forçar admin (OTP):", e?.response?.data || e.message);
+            console.error("Erro ao forçar admin (OTP):", e?.response?.data || e.message);
           }
 
           // Reset estados
@@ -408,7 +434,7 @@ import {
           Alert.alert("Erro", "Código inválido. Tenta novamente.");
         }
       } catch (err: any) {
-        console.error("❌ Erro verificação:", err);
+        console.error("Erro verificação:", err);
         Alert.alert("Erro", err.errors?.[0]?.message || "Código inválido");
       } finally {
         setIsLoading(false);
@@ -416,12 +442,16 @@ import {
     };
 
     // === LOGIN GOOGLE ===
+    // faz login com conta Google via OAuth
     const handleGoogleSignIn = async () => {
       try {
+        // inicia o fluxo OAuth do Google
         const { createdSessionId, signUp: googleSignUp } = await startGoogleOAuth();
+        // se obteve sessao, ativa e sincroniza
         if (createdSessionId && setSignInActive) {
           await setSignInActive({ session: createdSessionId });
           if (googleSignUp?.createdUserId) {
+            // sincroniza o user no backend com role "user"
             await syncUser(
               googleSignUp.createdUserId,
               googleSignUp.emailAddress || email,
@@ -431,6 +461,7 @@ import {
               "user"
             );
           }
+          // redireciona com base no role
           await redirectByRole();
         }
       } catch (err: any) {
@@ -439,12 +470,16 @@ import {
     };
 
     // === LOGIN APPLE ===
+    // faz login com conta Apple via OAuth
     const handleAppleSignIn = async () => {
       try {
+        // inicia o fluxo OAuth da Apple
         const { createdSessionId, signUp: appleSignUp } = await startAppleOAuth();
+        // se obteve sessao, ativa e sincroniza
         if (createdSessionId && setSignInActive) {
           await setSignInActive({ session: createdSessionId });
           if (appleSignUp?.createdUserId) {
+            // sincroniza o user no backend com role "user"
             await syncUser(
               appleSignUp.createdUserId,
               appleSignUp.emailAddress || email,
@@ -454,6 +489,7 @@ import {
               "user"
             );
           }
+          // redireciona com base no role
           await redirectByRole();
         }
       } catch (err: any) {
@@ -474,7 +510,6 @@ import {
       setPendingVerification(false);
       setVerificationCode("");
       setPendingSignUp(null);
-      // NOVO: Reset estados de erro
       setCodeError("");
       setCodeAttempts(0);
       setCodeInputError(false);
@@ -507,7 +542,6 @@ import {
         keyboardType?: any;
         autoCapitalize?: any;
         highlight?: boolean;
-        // NOVO: propriedade para erro
         error?: boolean;
       }
     ) => (
@@ -795,7 +829,6 @@ import {
 
                       {renderInput("shield", "Código de segurança", adminCode, (text) => {
                         setAdminCode(text);
-                        // NOVO: Limpar erro quando começa a escrever
                         if (codeError) {
                           setCodeError("");
                           setCodeInputError(false);
@@ -803,11 +836,10 @@ import {
                       }, {
                         highlight: true,
                         autoCapitalize: "characters",
-                        // NOVO: passar estado de erro
                         error: codeInputError,
                       })}
 
-                      {/* NOVO: Mensagem de erro embaixo do input */}
+                      {/* Mensagem de erro embaixo do input */}
                       {codeError ? (
                         <Text
                           style={{
@@ -822,7 +854,7 @@ import {
                         </Text>
                       ) : null}
 
-                      {/* NOVO: Contador de tentativas */}
+                      {/* Contador de tentativas */}
                       {codeAttempts > 0 && !codeError ? (
                         <Text
                           style={{
