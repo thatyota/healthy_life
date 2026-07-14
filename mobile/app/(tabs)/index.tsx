@@ -19,12 +19,14 @@ export default function HomeScreen() {
     useUserSync();
 
     // busca os posts do backend
+    // data = array de posts, isLoading = true enquanto busca, isError = true se der erro
+    // error = objeto com detalhes do erro, refetch = funcao para buscar de novo
     const { data: posts, isLoading, isError, error, refetch } = usePosts();
 
-    // refreshing indica se o pull-to-refresh esta ativo
+    // refreshing = true quando o user faz pull-to-refresh (arrastar para baixo)
     const [refreshing, setRefreshing] = useState(false);
 
-    // darkMode e language vem do ThemeContext
+    // darkMode e language vem do ThemeContext (tema escuro/claro e idioma)
     const { darkMode, language } = useTheme();
 
     /**
@@ -95,11 +97,49 @@ export default function HomeScreen() {
         placeholder: darkMode ? "#7cb342" : "#8E8E8E",
     };
 
-    // funcao que retorna a mensagem de erro amigavel
+    /**
+     * getErrorMessage — retorna uma STRING com a mensagem de erro
+     *
+     * IMPORTANTE: Esta funcao DEVE retornar uma string (texto).
+     * Se retornar um objeto, o React crasha com:
+     * "Objects are not valid as a React child"
+     *
+     * O erro pode vir em diferentes formatos:
+     * - error.response.data.error (string do backend)
+     * - error.response.data (objeto com code + message)
+     * - error.message (mensagem do axios)
+     * - lang.erro (fallback)
+     */
     const getErrorMessage = () => {
+        // Se nao ha erro, retorna mensagem generica
         if (!error) return lang.erroDesconhecido;
-        if ((error as any).response?.data?.error) return (error as any).response.data.error;
-        if ((error as any).message) return (error as any).message;
+
+        const err = error as any;
+
+        // CASO 1: error.response.data.error = string do backend
+        // Ex: "A server error has occurred"
+        if (err.response?.data?.error && typeof err.response.data.error === "string") {
+            return err.response.data.error;
+        }
+
+        // CASO 2: error.response.data.message = outro formato comum
+        if (err.response?.data?.message && typeof err.response.data.message === "string") {
+            return err.response.data.message;
+        }
+
+        // CASO 3: error.response.data = objeto com code + message
+        // Ex: { code: "500", message: "A server error..." }
+        // Neste caso pegamos apenas a propriedade message
+        if (err.response?.data?.message) {
+            return err.response.data.message;
+        }
+
+        // CASO 4: error.message = mensagem do axios
+        if (err.message && typeof err.message === "string") {
+            return err.message;
+        }
+
+        // CASO 5: fallback — retorna texto generico
         return lang.erro;
     };
 
@@ -131,6 +171,7 @@ export default function HomeScreen() {
                             <Ionicons name="warning-outline" size={32} color={theme.error} />
                         </View>
                         <Text className="text-base text-center font-bold" style={{ color: theme.error }}>{lang.erro}</Text>
+                        {/* getErrorMessage() retorna STRING — React consegue renderizar */}
                         <Text className="text-sm text-center mt-2" style={{ color: theme.textSecondary }}>{getErrorMessage()}</Text>
                         <Text className="text-xs text-center mt-4" style={{ color: theme.placeholder }}>{lang.tentarNovamente}</Text>
                     </View>

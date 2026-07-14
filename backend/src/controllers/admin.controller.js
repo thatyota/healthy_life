@@ -2,6 +2,7 @@ import User from "../models/user.model.js";
 import Post from "../models/post.model.js";
 import Comment from "../models/comment.model.js";
 import Report from "../models/report.model.js";
+import { getAuth } from "@clerk/express";  // ← IMPORT do Clerk para buscar o userId
 
 // =============================================================================
 // checkAdmin
@@ -11,12 +12,23 @@ import Report from "../models/report.model.js";
 // =============================================================================
 export const checkAdmin = async (req, res) => {
     try {
-        const user = await User.findOne({ clerkId: req.auth.userId });
+        // getAuth(req) busca o userId do token JWT do Clerk
+        // req.auth.userId pode nao existir — usamos getAuth(req) que e mais fiavel
+        const { userId } = getAuth(req);
+
+        // Se nao houver userId, o user nao esta autenticado
+        if (!userId) {
+            return res.status(401).json({ error: "Nao autenticado" });
+        }
+
+        // Busca o user no MongoDB pelo clerkId
+        const user = await User.findOne({ clerkId: userId });
 
         if (!user) {
             return res.status(404).json({ error: "User nao encontrado" });
         }
 
+        // Retorna se e admin, o role e o userId do MongoDB
         res.json({
             isAdmin: user.role === "admin",
             role: user.role,
@@ -83,8 +95,7 @@ export const getAllUsers = async (req, res) => {
 export const getAllPosts = async (req, res) => {
     try {
         const posts = await Post.find()
-            .populate("author", "Username ProfilePicture")
-            .populate("comments")
+            .populate("User", "Username ProfilePicture")
             .sort({ createdAt: -1 });
 
         res.json({ posts });

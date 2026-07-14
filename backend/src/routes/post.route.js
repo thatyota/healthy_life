@@ -1,6 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import upload from "../config/multer.js";  // ← MIDDLEWARE PARA UPLOAD DE IMAGENS
+import upload from "../middleware/upload.middleware.js"; 
 import {
   getPosts,
   getPost,
