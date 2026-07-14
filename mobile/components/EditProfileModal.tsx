@@ -14,21 +14,43 @@ import { Feather } from "@expo/vector-icons";
 import { CurrentUser, useUpdateProfile } from "@/hooks/useCurrentUser";
 import * as ImagePicker from "expo-image-picker";
 
+// ============================================
+// PROPS do componente
+// ============================================
+// visible = se o modal esta aberto
+// onClose = funcao para fechar o modal
+// onSuccess = funcao que o parent chama quando o update tem sucesso (para atualizar o perfil)
+// user = dados atuais do user (para preencher os campos)
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   user: CurrentUser;
 }
 
-export default function EditProfileModal({ visible, onClose, user }: Props) {
+// ============================================
+// COMPONENTE: EditProfileModal
+// ============================================
+// Modal para editar o perfil do user (nome, bio, foto, banner, localizacao)
+export default function EditProfileModal({ visible, onClose, onSuccess, user }: Props) {
+  // ----------------------------------------
+  // ESTADO LOCAL
+  // ----------------------------------------
   const [firstName, setFirstName] = useState(user.FirstName || "");
   const [lastName, setLastName] = useState(user.LastName || "");
   const [bio, setBio] = useState(user.bio || "");
   const [location, setLocation] = useState(user.location || "");
+  // profileImage = URI da nova foto escolhida (null se nao escolheu nova)
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  // bannerImage = URI da nova banner escolhida (null se nao escolheu nova)
   const [bannerImage, setBannerImage] = useState<string | null>(null);
+  // updateMutation = hook para fazer o update no backend
   const updateMutation = useUpdateProfile();
 
+  // ----------------------------------------
+  // FUNCAO: pickImage
+  // ----------------------------------------
+  // Abre a galeria para escolher uma imagem (perfil ou banner)
   const pickImage = async (type: "profile" | "banner") => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -46,25 +68,73 @@ export default function EditProfileModal({ visible, onClose, user }: Props) {
     }
   };
 
+  // ----------------------------------------
+  // FUNCAO: handleSave
+  // ----------------------------------------
+  // Guarda as alteracoes no backend
+  // Envia os dados como FormData (para suportar upload de imagens)
   const handleSave = () => {
-    const data: any = {};
-    if (firstName !== user.FirstName) data.FirstName = firstName;
-    if (lastName !== user.LastName) data.LastName = lastName;
-    if (bio !== user.bio) data.bio = bio;
-    if (location !== user.location) data.location = location;
+    // Verifica se houve alguma alteracao (texto ou imagens)
+    const hasTextChanges =
+      firstName !== user.FirstName ||
+      lastName !== user.LastName ||
+      bio !== user.bio ||
+      location !== user.location;
 
-    if (Object.keys(data).length === 0 && !profileImage && !bannerImage) {
+    const hasImageChanges = profileImage !== null || bannerImage !== null;
+
+    // Se nao houve alteracoes → fecha sem fazer nada
+    if (!hasTextChanges && !hasImageChanges) {
       onClose();
       return;
     }
 
-    updateMutation.mutate(data, {
+    // Cria um FormData para enviar dados + ficheiros
+    // O FormData e necessario porque vamos enviar imagens (ficheiros)
+    // JSON nao suporta ficheiros, so FormData
+    const formData = new FormData();
+
+    // Adiciona os campos de texto ao FormData
+    if (firstName !== user.FirstName) formData.append("FirstName", firstName);
+    if (lastName !== user.LastName) formData.append("LastName", lastName);
+    if (bio !== user.bio) formData.append("bio", bio);
+    if (location !== user.location) formData.append("location", location);
+
+    // Se escolheu uma nova foto de perfil → adiciona ao FormData
+    if (profileImage) {
+      const filename = profileImage.split("/").pop() || "profile.jpg";
+      const match = /\.([a-zA-Z]+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : "image/jpeg";
+
+      formData.append("ProfilePicture", {
+        uri: profileImage,
+        name: filename,
+        type: type,
+      } as any);
+    }
+
+    // Se escolheu uma nova banner → adiciona ao FormData
+    if (bannerImage) {
+      const filename = bannerImage.split("/").pop() || "banner.jpg";
+      const match = /\.([a-zA-Z]+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : "image/jpeg";
+
+      formData.append("bannerImage", {
+        uri: bannerImage,
+        name: filename,
+        type: type,
+      } as any);
+    }
+
+    // Chama o hook useUpdateProfile com o FormData
+    updateMutation.mutate(formData, {
       onSuccess: () => {
         Alert.alert("Sucesso", "Perfil atualizado!");
+        onSuccess?.();
         onClose();
       },
       onError: () => {
-        Alert.alert("Erro", "Não foi possível atualizar o perfil.");
+        Alert.alert("Erro", "Nao foi possivel atualizar o perfil.");
       },
     });
   };
@@ -136,7 +206,7 @@ export default function EditProfileModal({ visible, onClose, user }: Props) {
             </View>
 
             <View>
-              <Text className="text-[#3A6604] font-semibold mb-1">Último Nome</Text>
+              <Text className="text-[#3A6604] font-semibold mb-1">Ultimo Nome</Text>
               <TextInput
                 value={lastName}
                 onChangeText={setLastName}
@@ -161,7 +231,7 @@ export default function EditProfileModal({ visible, onClose, user }: Props) {
             </View>
 
             <View>
-              <Text className="text-[#3A6604] font-semibold mb-1">Localização</Text>
+              <Text className="text-[#3A6604] font-semibold mb-1">Localizacao</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}

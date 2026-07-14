@@ -28,40 +28,87 @@ import { useTheme } from "../context/ThemeContext";
  * os posts do user, e um modal de definicoes com tema e idioma.
  */
 export default function ProfileScreen() {
+    // ----------------------------------------
+    // HOOKS
+    // ----------------------------------------
+    // useCurrentUser = busca os dados do user logado (inclui nome, bio, foto, etc.)
+    // refetchUser = funcao para buscar dados novos (usada no onSuccess do edit)
     const { data: user, isLoading: userLoading, error: userError, refetch: refetchUser } = useCurrentUser();
+    // useUserPosts = busca os posts do user logado
     const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useUserPosts(user?.Username || "");
+    // useSignOut = faz logout e redireciona para login
     const { handleSignOut } = useSignOut();
+    // useDeleteAccount = apaga a conta do user
     const deleteAccount = useDeleteAccount();
+    // useTheme = darkMode, language, toggleDarkMode, setLanguage
     const { darkMode, toggleDarkMode, language, setLanguage } = useTheme();
 
+    // ----------------------------------------
+    // ESTADO LOCAL
+    // ----------------------------------------
+    // refreshing = true quando o user faz pull-to-refresh
     const [refreshing, setRefreshing] = useState(false);
+    // editModalVisible = true quando o modal de editar perfil esta aberto
     const [editModalVisible, setEditModalVisible] = useState(false);
+    // settingsVisible = true quando o modal de definicoes esta aberto
     const [settingsVisible, setSettingsVisible] = useState(false);
 
+    /**
+     * onRefresh — funcao chamada quando o user faz pull-to-refresh
+     *
+     * Atualiza os dados do user e os posts em paralelo.
+     */
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
+        // Promise.all executa as duas chamadas em paralelo (mais rapido)
         await Promise.all([refetchUser(), refetchPosts()]);
         setRefreshing(false);
     }, [refetchUser, refetchPosts]);
 
+    /**
+     * changeLanguage — muda o idioma da app
+     */
     const changeLanguage = (langCode: "pt" | "en") => {
         setLanguage(langCode);
     };
 
+    /**
+     * handleLogout — mostra alerta de confirmacao antes de fazer logout
+     */
     const handleLogout = () => {
         Alert.alert(lang.sair, lang.confirmSair, [
             { text: lang.cancelar, style: "cancel" },
-            { text: lang.sair, style: "destructive", onPress: () => { setSettingsVisible(false); handleSignOut(); } },
+            {
+                text: lang.sair,
+                style: "destructive",
+                onPress: () => {
+                    setSettingsVisible(false);  // fecha o modal de definicoes
+                    handleSignOut();            // faz logout
+                },
+            },
         ]);
     };
 
+    /**
+     * handleDeleteAccountPress — mostra alerta de confirmacao antes de apagar conta
+     */
     const handleDeleteAccountPress = () => {
         Alert.alert(lang.deletar, lang.confirmDeletar, [
             { text: lang.cancelar, style: "cancel" },
-            { text: lang.deletar, style: "destructive", onPress: () => { setSettingsVisible(false); deleteAccount.mutate(); } },
+            {
+                text: lang.deletar,
+                style: "destructive",
+                onPress: () => {
+                    setSettingsVisible(false);
+                    deleteAccount.mutate();
+                },
+            },
         ]);
     };
 
+    // ----------------------------------------
+    // TRADUCOES
+    // ----------------------------------------
     const t = {
         pt: {
             perfil: "Perfil",
@@ -115,92 +162,45 @@ export default function ProfileScreen() {
 
     const lang = t[language];
 
-    // =============================================================================
+    // ----------------------------------------
     // TEMA — Paleta de cores suave e agradavel
-    // =============================================================================
-    // O tema escuro usa verdes suaves em vez de preto/verde musgo pesado.
-    // Inspirado no tema claro mas com tons mais profundos e acolhedores.
-    //
-    // Fundo: verde muito escuro mas suave (quase preto-verde)
-    // Cards: verde escuro com leve transparencia
-    // Texto: verde lima claro e branco esverdeado
-    // Bordas: verde musgo suave
-    // Acentos: verde lima brilhante
-    // =============================================================================
-
+    // ----------------------------------------
     const theme = {
-        // Fundo principal — verde muito escuro, quase preto-verde
-        // Mas suave, nao aquele verde musgo pesado de antes
         bg: darkMode ? "#0f1f0f" : "#F1F8E9",
-
-        // Fundo dos cards — verde escuro suave com leve transparencia
         cardBg: darkMode ? "#1a2e1a" : "#FFFFFF",
-
-        // Fundo do header — um pouco mais claro que o fundo para destacar
         headerBg: darkMode ? "#162616" : "#FFFFFF",
-
-        // Texto principal — verde lima claro e suave
         text: darkMode ? "#a3d977" : "#3A6604",
-
-        // Texto secundario — verde musgo claro
         textSecondary: darkMode ? "#7a9e5c" : "#486623",
-
-        // Texto do corpo/bio — branco esverdeado suave
         textBody: darkMode ? "#c8ddb8" : "#1a1a1a",
-
-        // Texto muted — verde acinzentado suave
         textMuted: darkMode ? "#5a7a4a" : "#666666",
-
-        // Bordas — verde musgo suave
         border: darkMode ? "#2a4a2a" : "#C8E6C9",
-
-        // Banner vazio — verde escuro suave
         banner: darkMode ? "#1a301a" : "#C8E6C9",
-
-        // Avatar vazio
         avatarBg: "#3A6604",
-
-        // Separador
         separator: darkMode ? "#1e351e" : "#E8F5E9",
-
-        // Loading — verde lima brilhante
         loading: darkMode ? "#7bc043" : "#65B307",
-
-        // Erro
         error: "#e57373",
         errorBg: darkMode ? "#3a1e1e" : "#FFEBEE",
-
-        // Botoes
         buttonBg: darkMode ? "#4a8a3a" : "#65B307",
         buttonText: "#FFFFFF",
-
-        // Modal
         modalBg: darkMode ? "#1a2e1a" : "#FFFFFF",
         modalOverlay: "rgba(0,0,0,0.6)",
-
-        // Switch
         switchTrackActive: "#4a8a3a",
         switchTrackInactive: darkMode ? "#2a4a2a" : "#C8E6C9",
-
-        // Idioma selecionado
         langSelectedBg: darkMode ? "#2a4a2a" : "#E8F5E9",
         langSelectedBorder: darkMode ? "#5a8a4a" : "#65B307",
         langSelectedText: darkMode ? "#a3d977" : "#3A6604",
         langUnselectedText: darkMode ? "#6a9a5a" : "#486623",
-
-        // Logout
         logoutBg: darkMode ? "#3a2e1a" : "#FFF3E0",
         logoutText: "#e6a050",
-
-        // Delete
         deleteBg: darkMode ? "#3a1e1e" : "#FFEBEE",
         deleteText: "#e57373",
-
-        // Empty state
         emptyBg: darkMode ? "#1e351e" : "#E8F5E9",
         emptyIcon: darkMode ? "#5a8a4a" : "#65B307",
     };
 
+    // ----------------------------------------
+    // LOADING
+    // ----------------------------------------
     if (userLoading) {
         return (
             <SafeAreaView className="flex-1 justify-center items-center" style={{ backgroundColor: theme.bg }}>
@@ -210,6 +210,9 @@ export default function ProfileScreen() {
         );
     }
 
+    // ----------------------------------------
+    // ERRO
+    // ----------------------------------------
     if (userError || !user) {
         return (
             <SafeAreaView className="flex-1 justify-center items-center px-6" style={{ backgroundColor: theme.bg }}>
@@ -225,6 +228,9 @@ export default function ProfileScreen() {
         );
     }
 
+    // ----------------------------------------
+    // DADOS DO USER
+    // ----------------------------------------
     const displayName = `${user.FirstName || ""} ${user.LastName || ""}`.trim() || user.Username;
     const postsCount = posts?.length || 0;
     const followersCount = user.Followers?.length || 0;
@@ -321,7 +327,22 @@ export default function ProfileScreen() {
                 )}
             </ScrollView>
 
-            <EditProfileModal visible={editModalVisible} onClose={() => setEditModalVisible(false)} user={user} />
+            {/* ============================================ */}
+            {/* EDIT PROFILE MODAL */}
+            {/* ============================================ */}
+            {/* onSuccess = chama refetchUser() para atualizar o perfil com os dados novos */}
+            <EditProfileModal
+                visible={editModalVisible}
+                onClose={() => setEditModalVisible(false)}
+                onSuccess={() => {
+                    // Quando o editar perfil guarda com sucesso:
+                    // 1. Atualiza os dados do user (nome, bio, etc.)
+                    refetchUser();
+                    // 2. Atualiza os posts (se mudou o nome/foto)
+                    refetchPosts();
+                }}
+                user={user}
+            />
 
             {/* Settings Modal */}
             <Modal visible={settingsVisible} transparent animationType="slide" onRequestClose={() => setSettingsVisible(false)}>

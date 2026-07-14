@@ -6,6 +6,7 @@ import User from "../models/user.model.js";
 import Post from "../models/post.model.js";
 import Comment from "../models/comment.model.js";
 import Notification from "../models/notification.model.js";
+import cloudinary from "../config/cloudinary.js";
 
 // ========== 1. PERFIL ==========
 
@@ -25,12 +26,66 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
   res.status(200).json({ user });
 });
 
-// atualiza perfil do user logado
+// atualiza perfil do user logado (inclui upload de imagens)
 export const updateProfile = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
-  const user = await User.findOneAndUpdate({ clerkId: userId }, req.body, { new: true });
+
+  // busca o user no MongoDB
+  const user = await User.findOne({ clerkId: userId });
   if (!user) return res.status(404).json({ error: "User not found" });
-  res.status(200).json({ user });
+
+  // dados de texto vem no req.body (processados pelo multer)
+  const { FirstName, LastName, bio, location } = req.body;
+
+  // prepara o objeto de atualizacao
+  const updateData = {};
+
+  // so adiciona os campos que foram enviados
+  if (FirstName !== undefined) updateData.FirstName = FirstName;
+  if (LastName !== undefined) updateData.LastName = LastName;
+  if (bio !== undefined) updateData.bio = bio;
+  if (location !== undefined) updateData.location = location;
+
+  // req.files contem os ficheiros enviados pelo multer (upload.any())
+  // req.files e um array de objetos: [{ fieldname, buffer, mimetype, ... }]
+  if (req.files && req.files.length > 0) {
+    for (const file of req.files) {
+      try {
+        // converte o buffer para base64
+        const base64Image = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+
+        // faz upload para o Cloudinary
+        const uploadResponse = await cloudinary.uploader.upload(base64Image, {
+          folder: "user_profiles",  // pasta no Cloudinary
+          resource_type: "image",
+          transformation: [
+            { width: 800, height: 800, crop: "limit" },
+            { quality: "auto" },
+            { format: "auto" },
+          ],
+        });
+
+        // guarda a URL da imagem no campo correto
+        if (file.fieldname === "ProfilePicture") {
+          updateData.ProfilePicture = uploadResponse.secure_url;
+        } else if (file.fieldname === "bannerImage") {
+          updateData.bannerImage = uploadResponse.secure_url;
+        }
+      } catch (uploadError) {
+        console.error("Erro ao fazer upload da imagem:", uploadError);
+        return res.status(400).json({ error: "Erro ao fazer upload da imagem" });
+      }
+    }
+  }
+
+  // atualiza o user no MongoDB
+  const updatedUser = await User.findByIdAndUpdate(
+    user._id,
+    updateData,
+    { new: true }  // retorna o documento atualizado
+  );
+
+  res.status(200).json({ user: updatedUser });
 });
 
 // ========== 2. SINCRONIZACAO ==========
@@ -77,7 +132,6 @@ export const syncUser = asyncHandler(async (req, res) => {
     LastName: clerkUser.lastName || "",
     Username: clerkUser.emailAddresses[0].emailAddress.split("@")[0],
     ProfilePicture: clerkUser.imageUrl || "",
-    // NOTA: Não define role — usa o default do schema (provavelmente "user")
   };
 
   console.log("🔍 [user.controller syncUser] Dados para criar:", JSON.stringify(userData));
@@ -148,40 +202,30 @@ export const followUser = asyncHandler(async (req, res) => {
 export const deleteAccount = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
 
-  // encontra o user no MongoDB
   const user = await User.findOne({ clerkId: userId });
   if (!user) {
     return res.status(404).json({ error: "User not found" });
   }
 
-  // ========== 1. APAGAR TODOS OS POSTS DO USER ==========
-  // busca todos os posts do user para apagar comments e notificacoes relacionadas
   const userPosts = await Post.find({ User: user._id });
   for (const post of userPosts) {
-    await Comment.deleteMany({ post: post._id }); // apaga comments dos posts
-    await Notification.deleteMany({ post: post._id }); // apaga notificacoes dos posts
+    await Comment.deleteMany({ post: post._id });
+    await Notification.deleteMany({ post: post._id });
   }
-  await Post.deleteMany({ User: user._id }); // apaga todos os posts do user
+  await Post.deleteMany({ User: user._id });
 
-  // ========== 2. APAGAR COMMENTS DO USER EM POSTS DE OUTROS ==========
   await Comment.deleteMany({ user: user._id });
 
-  // ========== 3. REMOVER LIKES DO USER ==========
   await Post.updateMany(
     { "likes.user": user._id },
     { $pull: { likes: { user: user._id } } }
   );
 
-  // ========== 4. APAGAR NOTIFICACOES RELACIONADAS AO USER ==========
   await Notification.deleteMany({ $or: [{ from: user._id }, { to: user._id }] });
 
-  // ========== 5. REMOVER USER DAS LISTAS DE FOLLOWERS/FOLLOWING ==========
   await User.updateMany({ Followers: user._id }, { $pull: { Followers: user._id } });
   await User.updateMany({ Following: user._id }, { $pull: { Following: user._id } });
 
-  // ========== 6. LIMPAR DADOS DO USER (DEIXAR "FANTASMA" PARA REATIVACAO) ==========
-  // mantem so: _id, clerkId, email, isDeactivated, deactivatedAt
-  // apaga/tudo o resto para comecar de novo na reativacao
   user.FirstName = "";
   user.LastName = "";
   user.Username = `deactivated_${Date.now()}`;
@@ -197,7 +241,6 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   user.reactivationCodeExpires = null;
   await user.save();
 
-  // ========== 7. DESATIVAR NO CLERK (NAO APAGAR — MANTEM EMAIL) ==========
   try {
     await clerkClient.users.updateUser(userId, {
       publicMetadata: { deactivated: true },
@@ -253,19 +296,13 @@ export const sendReactivationCode = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: "Conta desativada nao encontrada" });
   }
 
-  // gera codigo aleatorio de 6 digitos
   const code = crypto.randomInt(100000, 999999).toString();
 
-  // guarda codigo com expiracao de 10 minutos
   user.reactivationCode = code;
   user.reactivationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
-  // envia codigo por email via Clerk (usa o email do proprio Clerk)
   try {
-    // NOTA: O Clerk nao tem envio direto de email customizado na API gratuita
-    // Para producao, usa SendGrid, Resend, AWS SES, etc.
-    // Aqui mostramos no console para teste e assumimos que o frontend mostra uma mensagem
     console.log(`========================================`);
     console.log(`CODIGO DE REATIVACAO PARA ${email}: ${code}`);
     console.log(`========================================`);
@@ -289,7 +326,7 @@ export const reactivateAccount = asyncHandler(async (req, res) => {
     email: email.toLowerCase(),
     isDeactivated: true,
     reactivationCode: code,
-    reactivationCodeExpires: { $gt: new Date() }, // codigo nao expirou
+    reactivationCodeExpires: { $gt: new Date() },
   });
 
   if (!user) {
@@ -298,15 +335,12 @@ export const reactivateAccount = asyncHandler(async (req, res) => {
     });
   }
 
-  // reativa a conta no MongoDB (dados ficam vazios — user preenche de novo)
   user.isDeactivated = false;
   user.deactivatedAt = null;
   user.reactivationCode = null;
   user.reactivationCodeExpires = null;
-  // FirstName, LastName, Username, etc. ficam vazios — user personaliza no perfil
   await user.save();
 
-  // reativa no Clerk
   try {
     await clerkClient.users.updateUser(user.clerkId, {
       publicMetadata: { deactivated: false },
