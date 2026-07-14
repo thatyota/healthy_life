@@ -3,30 +3,51 @@ import { getAuth } from "@clerk/express";
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
 
-// busca todas as notificacoes do user logado
+// ============================================
+// GET /api/notifications
+// Busca todas as notificações do user logado
+// ============================================
 export const getNotifications = asyncHandler(async (req, res) => {
   try {
+    // userId = ID do Clerk do user logado (vem do token JWT)
     const { userId } = getAuth(req);
 
-    // procura o user no mongo pelo clerkId
+    // Procura o user no MongoDB pelo clerkId
+    // Precisamos do _id do MongoDB para comparar com notification.to
     const user = await User.findOne({ clerkId: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // busca notificacoes onde o user e o destinatario
+    // Busca todas as notificações onde o user é o destinatário (to)
+    // Ordena por createdAt descendente (mais recentes primeiro)
     const notifications = await Notification.find({ to: user._id })
       .sort({ createdAt: -1 });
 
-    // faz populate manual do user que enviou (evita crash do populate)
+    // Faz populate manual do user que enviou (quem fez a ação)
+    // Usamos Promise.all para fazer todas as buscas em paralelo (mais rápido)
     const populatedNotifications = await Promise.all(
       notifications.map(async (notif) => {
-        const fromUser = await User.findById(notif.from).select("Username FirstName LastName ProfilePicture");
+        // Busca os dados do user que enviou (from)
+        const fromUser = await User.findById(notif.from).select(
+          "Username FirstName LastName ProfilePicture"
+        );
+
+        // Converte o documento Mongoose para objeto simples (plain object)
+        const notifObj = notif.toObject();
+
+        // Retorna a notificação com os dados do remetente populados
         return {
-          ...notif.toObject(),
-          from: fromUser || { Username: "Unknown", FirstName: "", LastName: "", ProfilePicture: "" }
+          ...notifObj,
+          from: fromUser || {
+            Username: "Unknown",
+            FirstName: "",
+            LastName: "",
+            ProfilePicture: "",
+          },
         };
       })
     );
 
+    // Envia as notificações para o frontend
     res.status(200).json({ notifications: populatedNotifications });
   } catch (error) {
     console.error("Error in getNotifications:", error.message);
@@ -34,21 +55,26 @@ export const getNotifications = asyncHandler(async (req, res) => {
   }
 });
 
-// marca uma notificacao como lida (so se for do user logado)
+// ============================================
+// PUT /api/notifications/:notificationId/read
+// Marca UMA notificação como lida
+// ============================================
 export const markAsRead = asyncHandler(async (req, res) => {
   try {
     const { userId } = getAuth(req);
     const { notificationId } = req.params;
 
-    // procura o user no mongo
+    // Procura o user no MongoDB
     const user = await User.findOne({ clerkId: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // verifica se a notificacao pertence ao user logado
+    // Atualiza a notificação para read: true
+    // Mas SÓ se a notificação pertencer ao user logado (to: user._id)
+    // Isto evita que um user marque notificações de outro user
     const notification = await Notification.findOneAndUpdate(
-      { _id: notificationId, to: user._id }, // so atualiza se o user for o dono
+      { _id: notificationId, to: user._id },
       { read: true },
-      { new: true }
+      { new: true }  // Retorna o documento atualizado
     );
 
     if (!notification) {
@@ -58,20 +84,24 @@ export const markAsRead = asyncHandler(async (req, res) => {
     res.status(200).json({ message: "Notification marked as read" });
   } catch (error) {
     console.error("Error in markAsRead:", error.message);
-    res.status(500).json({ error: error.message });  // ← CORRIGIDO: removido o import errado
+    res.status(500).json({ error: error.message });
   }
 });
 
-// marca todas as notificacoes do user como lidas
+// ============================================
+// PUT /api/notifications/read-all
+// Marca TODAS as notificações do user como lidas
+// ============================================
 export const markAllAsRead = asyncHandler(async (req, res) => {
   try {
     const { userId } = getAuth(req);
 
-    // procura o user no mongo
+    // Procura o user no MongoDB
     const user = await User.findOne({ clerkId: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // atualiza todas as notificacoes nao lidas do user
+    // updateMany atualiza TODAS as notificações que correspondem ao filtro
+    // Filtro: to: user._id (destinatário é o user logado) E read: false (só as não lidas)
     await Notification.updateMany(
       { to: user._id, read: false },
       { read: true }
@@ -84,17 +114,21 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
   }
 });
 
-// elimina uma notificacao (so se for do user logado)
+// ============================================
+// DELETE /api/notifications/:notificationId
+// Apaga UMA notificação (usado no swipe para o lado)
+// ============================================
 export const deleteNotification = asyncHandler(async (req, res) => {
   try {
     const { userId } = getAuth(req);
     const { notificationId } = req.params;
 
-    // procura o user no mongo
+    // Procura o user no MongoDB
     const user = await User.findOne({ clerkId: userId });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // verifica se a notificacao pertence ao user logado antes de apagar
+    // Verifica se a notificação pertence ao user logado antes de apagar
+    // Só apaga se notification.to === user._id (o user é o dono)
     const notification = await Notification.findOne({
       _id: notificationId,
       to: user._id,
@@ -104,8 +138,9 @@ export const deleteNotification = asyncHandler(async (req, res) => {
       return res.status(404).json({ error: "Notification not found or not yours" });
     }
 
-    // apaga a notificacao
+    // Apaga a notificação do MongoDB
     await Notification.findByIdAndDelete(notificationId);
+
     res.status(200).json({ message: "Notification deleted successfully" });
   } catch (error) {
     console.error("Error in deleteNotification:", error.message);

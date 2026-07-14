@@ -1,211 +1,333 @@
-import { View, Text, Image, TouchableOpacity, Animated, PanResponder } from "react-native";
+"use client";
+
+import React, { useRef, useCallback } from "react";
+import { View, Text, Image, TouchableOpacity, Animated, PanResponder, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Notification, useMarkAsRead, useDeleteNotification } from "@/hooks/useNotifications";
-import { useRouter } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
-import { useRef, useCallback } from "react";
+import { router } from "expo-router";
+import { useMarkAsRead, useDeleteNotification, useFollowUser } from "@/hooks/useNotifications";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import type { Notification } from "@/hooks/useNotifications";
 
-interface Props {
+// ============================================
+// PROPS do componente
+// ============================================
+// notification = objeto com os dados da notificação
+// onDelete = função que o parent chama quando apagamos (para atualizar a lista)
+interface NotificationItemProps {
   notification: Notification;
+  onDelete?: () => void;
 }
 
-function formatTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "agora";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
-export default function NotificationItem({ notification }: Props) {
-  const router = useRouter();
-  const { userId } = useAuth();
+// ============================================
+// COMPONENTE: NotificationItem
+// ============================================
+// Mostra UMA notificação no ecrã de notificações
+export default function NotificationItem({ notification, onDelete }: NotificationItemProps) {
+  // ----------------------------------------
+  // HOOKS
+  // ----------------------------------------
+  // useMarkAsRead = hook para marcar notificação como lida
   const markAsRead = useMarkAsRead();
+  // useDeleteNotification = hook para apagar notificação
   const deleteNotification = useDeleteNotification();
-  const translateX = useRef(new Animated.Value(0)).current;
+  // useFollowUser = hook para seguir/deixar de seguir alguém
+  const followUser = useFollowUser();
+  // useCurrentUser = hook para buscar os dados do user logado
+  const { data: currentUser } = useCurrentUser();
 
+  // ----------------------------------------
+  // ESTADO LOCAL
+  // ----------------------------------------
+  // translateX = valor animado para o efeito de swipe (arrastar para o lado)
+  // Começa em 0 (posição normal)
+  const translateX = useRef(new Animated.Value(0)).current;
+  // isFollowing = true se o user logado JÁ segue a pessoa da notificação
+  // Verifica se o ID do remetente está na lista Following do user logado
+  const isFollowing = currentUser?.Following?.includes(notification.from._id) || false;
+
+  // ----------------------------------------
+  // PAN RESPONDER (efeito de swipe para apagar)
+  // ----------------------------------------
+  // PanResponder = API do React Native para detectar gestos (arrastar)
   const panResponder = useRef(
     PanResponder.create({
+      // onStartShouldSetPanResponder = true significa que este componente captura o gesto
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dx < -10 && Math.abs(gestureState.dy) < 30;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0 && gestureState.dx > -200) {
-          translateX.setValue(gestureState.dx);
+      // onMoveShouldSetPanResponder = true significa que captura movimento
+      onMoveShouldSetPanResponder: () => true,
+
+      // onPanResponderMove = corre enquanto arrastamos o dedo
+      // dx = distância horizontal arrastada
+      onPanResponderMove: (_, { dx }) => {
+        // Só permite arrastar para a esquerda (dx negativo)
+        if (dx < 0) {
+          // Atualiza a posição X do card (efeito visual de arrastar)
+          translateX.setValue(dx);
         }
       },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -100) {
-          // swipe longo - deleta
+
+      // onPanResponderRelease = corre quando largamos o dedo
+      onPanResponderRelease: (_, { dx }) => {
+        // Se arrastamos mais de 100 pixels para a esquerda → apaga
+        if (dx < -100) {
+          // Anima o card a sair da tela (para a esquerda)
           Animated.timing(translateX, {
-            toValue: -500,
-            duration: 200,
+            toValue: -500,      // Sai 500px para a esquerda
+            duration: 200,      // 200ms de animação
             useNativeDriver: true,
           }).start(() => {
-            deleteNotification.mutate(notification._id);
+            // Quando a animação acaba → apaga a notificação no backend
+            handleDelete();
           });
         } else {
-          // volta ao sitio
+          // Se não arrastou o suficiente → volta à posição original (0)
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
-            friction: 8,
           }).start();
         }
       },
     })
   ).current;
 
-  const getNotificationText = () => {
-    switch (notification.type) {
-      case "follow": return "começou a seguir-te";
-      case "like": return "gostou da tua receita";
-      case "comment": return "comentou na tua receita";
-      default: return "interagiu contigo";
-    }
-  };
+  // ----------------------------------------
+  // FUNÇÃO: handleDelete
+  // ----------------------------------------
+  // Apaga a notificação no backend e chama onDelete do parent
+  const handleDelete = useCallback(() => {
+    // Chama o hook useDeleteNotification com o ID da notificação
+    deleteNotification.mutate(notification._id, {
+      // onSuccess = corre quando o backend responde com sucesso
+      onSuccess: () => {
+        // Chama a função onDelete do parent (para atualizar a lista)
+        onDelete?.();
+      },
+      // onError = corre quando dá erro
+      onError: (error: any) => {
+        console.error("Erro ao apagar notificação:", error);
+        Alert.alert("Erro", "Não foi possível apagar a notificação");
+      },
+    });
+  }, [notification._id, deleteNotification, onDelete]);
 
-  const getIconName = () => {
-    switch (notification.type) {
-      case "follow": return "person-add";
-      case "like": return "heart";
-      case "comment": return "chatbubble";
-      default: return "notifications";
-    }
-  };
-
-  const getIconColor = () => {
-    switch (notification.type) {
-      case "follow": return "#65B307";
-      case "like": return "#ED4956";
-      case "comment": return "#3A6604";
-      default: return "#486623";
-    }
-  };
-
+  // ----------------------------------------
+  // FUNÇÃO: handlePress
+  // ----------------------------------------
+  // Quando clicamos na notificação → marca como lida e navega
   const handlePress = useCallback(() => {
+    // Se a notificação ainda não foi lida → marca como lida
     if (!notification.read) {
       markAsRead.mutate(notification._id);
     }
-    if (notification.type === "follow") {
-      router.push(`/profile/${notification.from.Username}` as any);
-    } else if (notification.post) {
-      router.push(`/post/${notification.post}` as any);
-    }
-  }, [notification, markAsRead, router]);
 
-  const displayName = `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim() || notification.from?.Username;
-  const isOwnProfile = userId === notification.from?._id;
+    // Se for notificação de follow → vai para o perfil da pessoa
+    if (notification.type === "follow") {
+      router.push(`/(tabs)/profile/${notification.from.Username}` as any);
+    }
+    // Se for notificação de like ou comment → vai para o post
+    else if (notification.type === "like" || notification.type === "comment") {
+      router.push(`/(tabs)/post/${notification.post}` as any);
+    }
+    // Se for delete_post → não navega (só mostra a notificação)
+  }, [notification, markAsRead]);
+
+  // ----------------------------------------
+  // FUNÇÃO: handleFollow
+  // ----------------------------------------
+  // Segue ou deixa de seguir a pessoa da notificação
+  const handleFollow = useCallback(() => {
+    // Chama o hook useFollowUser com o ID do remetente
+    followUser.mutate(notification.from._id, {
+      onSuccess: () => {
+        console.log(isFollowing ? "Deixou de seguir" : "Seguiu", notification.from.Username);
+      },
+      onError: (error: any) => {
+        console.error("Erro ao seguir:", error);
+        Alert.alert("Erro", "Não foi possível seguir este utilizador");
+      },
+    });
+  }, [notification.from._id, followUser, isFollowing]);
+
+  // ----------------------------------------
+  // FUNÇÃO: getNotificationText
+  // ----------------------------------------
+  // Devolve o texto da ação consoante o tipo de notificação
+  const getNotificationText = () => {
+    switch (notification.type) {
+      case "follow":
+        return "começou a seguir-te";
+      case "like":
+        return "gostou da tua publicação";
+      case "comment":
+        return "comentou na tua publicação";
+      case "delete_post":
+        return "removeu a tua publicação";
+      default:
+        return "interagiu contigo";
+    }
+  };
+
+  // ----------------------------------------
+  // FUNÇÃO: getIconName
+  // ----------------------------------------
+  // Devolve o nome do ícone consoante o tipo
+  const getIconName = () => {
+    switch (notification.type) {
+      case "follow":
+        return "person-add";
+      case "like":
+        return "heart";
+      case "comment":
+        return "chatbubble";
+      case "delete_post":
+        return "trash";
+      default:
+        return "notifications";
+    }
+  };
+
+  // ----------------------------------------
+  // FUNÇÃO: getIconColor
+  // ----------------------------------------
+  // Devolve a cor do ícone consoante o tipo
+  const getIconColor = () => {
+    switch (notification.type) {
+      case "follow":
+        return "#83E509";  // Verde
+      case "like":
+        return "#ED4956";  // Vermelho
+      case "comment":
+        return "#2196F3";  // Azul
+      case "delete_post":
+        return "#C62828";  // Vermelho escuro
+      default:
+        return "#666";
+    }
+  };
+
+  // ----------------------------------------
+  // RENDER
+  // ----------------------------------------
+  // senderName = nome a mostrar
+  // Se for delete_post → mostra "Moderador" (não o nome do admin)
+  // Senão → mostra FirstName + LastName
+  const senderName = notification.type === "delete_post"
+    ? "Moderador"
+    : `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim();
+
+  // isDeletePost = true se for notificação de remoção de post
+  // Usado para esconder a foto do admin
+  const isDeletePost = notification.type === "delete_post";
 
   return (
-    <View style={{ position: "relative", overflow: "hidden" }}>
-      {/* fundo vermelho - fica ATRAS (zIndex menor) */}
-      <View 
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: "100%",
-          backgroundColor: "#C62828",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          paddingRight: 24,
-          zIndex: 1,
-        }}
-      >
-        <Ionicons name="trash-outline" size={24} color="white" />
+    <View className="relative">
+      {/* Fundo vermelho que aparece quando arrastamos (efeito visual) */}
+      <View className="absolute right-0 top-0 bottom-0 w-24 bg-red-500 justify-center items-center rounded-lg">
+        <Ionicons name="trash" size={24} color="white" />
+        <Text className="text-white text-xs mt-1">Apagar</Text>
       </View>
 
-      {/* conteudo - fica NA FRENTE (zIndex maior) */}
+      {/* Card da notificação (arrastável) */}
       <Animated.View
-        style={{ 
-          transform: [{ translateX }],
-          zIndex: 2,
-          backgroundColor: !notification.read ? "#E8F5E9" : "white",
-        }}
+        style={{ transform: [{ translateX }] }}
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
           onPress={handlePress}
-          activeOpacity={0.7}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            borderBottomWidth: 1,
-            borderBottomColor: "#E8F5E9",
-          }}
+          className={`flex-row items-center p-4 border-b border-gray-100 ${
+            // Se não foi lida → fundo cinza claro
+            !notification.read ? "bg-gray-50" : "bg-white"
+          }`}
         >
-          {/* avatar */}
-          <View style={{ position: "relative" }}>
-            {notification.from?.ProfilePicture ? (
-              <Image
-                source={{ uri: notification.from.ProfilePicture }}
-                style={{ width: 48, height: 48, borderRadius: 24 }}
-              />
-            ) : (
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#3A6604", justifyContent: "center", alignItems: "center" }}>
-                <Text style={{ color: "white", fontWeight: "bold", fontSize: 18 }}>
-                  {notification.from?.Username?.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <View style={{
-              position: "absolute",
-              bottom: -2,
-              right: -2,
-              width: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: "white",
-              justifyContent: "center",
-              alignItems: "center",
-              borderWidth: 2,
-              borderColor: "#E8F5E9",
-            }}>
-              <Ionicons name={getIconName()} size={11} color={getIconColor()} />
-            </View>
-          </View>
-
-          {/* texto */}
-          <View style={{ flex: 1, marginLeft: 12, marginRight: 8 }}>
-            <Text style={{ color: "#1a1a1a", fontSize: 14, lineHeight: 20 }} numberOfLines={2}>
-              <Text style={{ fontWeight: "bold", color: "#3A6604" }}>{displayName}</Text>
-              <Text style={{ color: "#1a1a1a" }}> {getNotificationText()}</Text>
-            </Text>
-            <Text style={{ color: "#65B307", fontSize: 12, marginTop: 4, fontWeight: "500" }}>
-              {formatTimeAgo(notification.createdAt)}
-            </Text>
-          </View>
-
-          {/* lado direito */}
-          {notification.type === "follow" && !isOwnProfile ? (
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push(`/profile/${notification.from.Username}` as any);
-              }}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 6,
-                backgroundColor: "#65B307",
-                borderRadius: 999,
-              }}
+          {/* ============================================ */}
+          {/* AVATAR / ÍCONE */}
+          {/* ============================================ */}
+          {/* Se for delete_post → mostra ícone de lixo em vez da foto do admin */}
+          {isDeletePost ? (
+            <View
+              className="w-12 h-12 rounded-full justify-center items-center"
+              style={{ backgroundColor: "#FFEBEE" }}  // Fundo vermelho claro
             >
-              <Text style={{ color: "white", fontWeight: "bold", fontSize: 12 }}>Seguir</Text>
+              <Ionicons name="trash" size={24} color="#C62828" />
+            </View>
+          ) : (
+            <View className="relative">
+              {notification.from?.ProfilePicture ? (
+                <Image
+                  source={{ uri: notification.from.ProfilePicture }}
+                  className="w-12 h-12 rounded-full"
+                />
+              ) : (
+                <View className="w-12 h-12 rounded-full bg-gray-200 justify-center items-center">
+                  <Text className="text-gray-500 font-bold">
+                    {notification.from?.FirstName?.[0] || "?"}
+                  </Text>
+                </View>
+              )}
+
+              {/* Ícone pequeno do tipo de notificação (canto inferior direito do avatar) */}
+              <View
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full justify-center items-center"
+                style={{ backgroundColor: getIconColor() }}
+              >
+                <Ionicons name={getIconName()} size={10} color="white" />
+              </View>
+            </View>
+          )}
+
+          {/* ============================================ */}
+          {/* TEXTO DA NOTIFICAÇÃO */}
+          {/* ============================================ */}
+          <View className="flex-1 ml-3">
+            <Text className="text-sm text-gray-800">
+              {/* Nome em negrito */}
+              <Text className="font-bold">{senderName}</Text>
+              {/* Texto da ação */}
+              <Text> {getNotificationText()}</Text>
+            </Text>
+
+            {/* Se for delete_post → mostra o motivo em vermelho */}
+            {isDeletePost && (notification as any).reason && (
+              <Text className="text-xs text-red-600 mt-1 italic">
+                Motivo: {(notification as any).reason}
+              </Text>
+            )}
+
+            {/* Data da notificação */}
+            <Text className="text-xs text-gray-400 mt-1">
+              {new Date(notification.createdAt).toLocaleDateString("pt-PT")}
+            </Text>
+          </View>
+
+          {/* ============================================ */}
+          {/* BOTÃO "SEGUIR" (só para follow) */}
+          {/* ============================================ */}
+          {notification.type === "follow" && (
+            <TouchableOpacity
+              onPress={handleFollow}
+              className={`px-4 py-2 rounded-full ${
+                // Se já estou a seguir → fundo cinza
+                isFollowing
+                  ? "bg-gray-200"
+                  // Se não estou a seguir → fundo verde
+                  : "bg-[#83E509]"
+              }`}
+            >
+              <Text
+                className={`text-sm font-semibold ${
+                  isFollowing ? "text-gray-600" : "text-white"
+                }`}
+              >
+                {/* Texto do botão muda consoante o estado */}
+                {isFollowing ? "A seguir" : "Seguir"}
+              </Text>
             </TouchableOpacity>
-          ) : !notification.read ? (
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#65B307" }} />
-          ) : null}
+          )}
+
+          {/* Bolinha azul (só aparece se não foi lida) */}
+          {!notification.read && (
+            <View className="w-2 h-2 rounded-full bg-blue-500 ml-2" />
+          )}
         </TouchableOpacity>
       </Animated.View>
     </View>
