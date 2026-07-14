@@ -1,5 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
+import upload from "../config/multer.js";  // ← MIDDLEWARE PARA UPLOAD DE IMAGENS
 import {
   getPosts,
   getPost,
@@ -10,6 +11,7 @@ import {
   adminDeletePost,
 } from "../controllers/post.controller.js";
 
+// Cria o router do Express
 const router = express.Router();
 
 // =============================================================================
@@ -32,7 +34,11 @@ router.get("/user/:username", getUserPosts);
 // POST /api/posts
 // Criar novo post (requer autenticação)
 // Body: { content: string } + file opcional (imagem)
-router.post("/", protectRoute, createPost);
+//
+// upload.single("image") = middleware do multer que processa o upload de 1 imagem
+// O campo no FormData deve chamar-se "image" (ex: formData.append("image", file))
+// Sem este middleware, req.body fica undefined e req.file não existe
+router.post("/", protectRoute, upload.single("image"), createPost);
 
 // POST /api/posts/:postId/like
 // Dar ou remover like de um post (requer autenticação)
