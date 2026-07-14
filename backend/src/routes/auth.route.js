@@ -172,7 +172,7 @@ router.get("/me", protectRoute, async (req, res) => {
 // Antes de mostrar o formulário de login/registo admin, verifica o código
 // Se válido, mostra o formulário; se inválido, mostra erro
 // =============================================================================
-router.post("/verify-admin", protectRoute, async (req, res) => {
+router.post("/verify-admin", async (req, res) => {
   try {
     const { adminCode } = req.body;
 

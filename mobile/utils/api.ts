@@ -11,8 +11,26 @@ export const createApiClient = (getToken: () => Promise<string | null>): AxiosIn
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Log de debug para cada request
+    console.log("🔍 [API REQUEST]", config.method?.toUpperCase(), config.url);
+    console.log("🔍 [API REQUEST] Body:", JSON.stringify(config.data));
+    console.log("🔍 [API REQUEST] Headers:", JSON.stringify(config.headers));
     return config;
   });
+
+  api.interceptors.response.use(
+    (response) => {
+      console.log("✅ [API RESPONSE]", response.config.method?.toUpperCase(), response.config.url, "→", response.status);
+      console.log("✅ [API RESPONSE] Data:", JSON.stringify(response.data));
+      return response;
+    },
+    (error) => {
+      console.error("❌ [API ERROR]", error.config?.method?.toUpperCase(), error.config?.url, "→", error.response?.status);
+      console.error("❌ [API ERROR] Data:", JSON.stringify(error.response?.data));
+      return Promise.reject(error);
+    }
+  );
+
   return api;
 };
 
@@ -22,7 +40,11 @@ export const useApiClient = (): AxiosInstance => {
 };
 
 export const userApi = {
-  syncUser: (api: AxiosInstance) => api.post("/users/sync"),
+  syncUser: (api: AxiosInstance) => {
+    console.log("🔍 [userApi.syncUser] A chamar POST /users/sync (SEM body)");
+    console.log("🔍 [userApi.syncUser] Stack trace:", new Error().stack);
+    return api.post("/users/sync");
+  },
   getCurrentUser: (api: AxiosInstance) => api.get("/users/me"),
   updateProfile: (api: AxiosInstance, data: any) => api.put("/users/profile", data),
 };

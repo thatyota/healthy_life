@@ -37,11 +37,23 @@ export const updateProfile = asyncHandler(async (req, res) => {
 
 // sincroniza user do Clerk com MongoDB (apos login social)
 export const syncUser = asyncHandler(async (req, res) => {
+  console.log("🔍 [user.controller syncUser] ==============================");
+  console.log("🔍 [user.controller syncUser] HEADERS:", JSON.stringify(req.headers));
+  console.log("🔍 [user.controller syncUser] BODY:", JSON.stringify(req.body));
+
   const { userId } = getAuth(req);
+  console.log("🔍 [user.controller syncUser] userId do Clerk:", userId);
+
   const existingUser = await User.findOne({ clerkId: userId });
+  console.log("🔍 [user.controller syncUser] existingUser:", existingUser ? {
+    username: existingUser.Username,
+    role: existingUser.role,
+    email: existingUser.email
+  } : "NÃO ENCONTRADO");
 
   // verifica se a conta esta desativada
   if (existingUser && existingUser.isDeactivated) {
+    console.log("❌ [user.controller syncUser] Conta desativada!");
     return res.status(403).json({
       error: "Conta desativada",
       isDeactivated: true,
@@ -50,9 +62,13 @@ export const syncUser = asyncHandler(async (req, res) => {
   }
 
   if (existingUser) {
+    console.log("✅ [user.controller syncUser] User já existe — retornando sem alterar");
+    console.log("✅ [user.controller syncUser] Role atual:", existingUser.role);
     return res.status(200).json({ user: existingUser, message: "User already exists" });
   }
 
+  // Se não existe, cria um NOVO user
+  console.log("🔍 [user.controller syncUser] User não existe — a criar novo...");
   const clerkUser = await clerkClient.users.getUser(userId);
   const userData = {
     clerkId: userId,
@@ -61,9 +77,12 @@ export const syncUser = asyncHandler(async (req, res) => {
     LastName: clerkUser.lastName || "",
     Username: clerkUser.emailAddresses[0].emailAddress.split("@")[0],
     ProfilePicture: clerkUser.imageUrl || "",
+    // NOTA: Não define role — usa o default do schema (provavelmente "user")
   };
 
+  console.log("🔍 [user.controller syncUser] Dados para criar:", JSON.stringify(userData));
   const user = await User.create(userData);
+  console.log("✅ [user.controller syncUser] User criado! Role:", user.role);
   res.status(201).json({ user, message: "User created successfully" });
 });
 
