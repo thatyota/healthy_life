@@ -12,11 +12,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // =============================================================================
 // Tabs Layout — Bottom Navigation Bar
 // =============================================================================
-// Tabs: Home | Search | [+] | Notifications | Profile | Admin (condicional)
+// Tabs: Home | Search | [+] | Notifications | Profile
 //
 // O botao [+] e um circulo verde flutuante CENTRALIZADO para criar posts.
-// O tab Admin USA href: null para users normais (nao aparece no tab bar).
-// So admins veem o tab Admin.
+// O tab Admin foi REMOVIDO da barra — so acessivel por link direto.
 //
 // Sem nomes nos tabs — so icones.
 // =============================================================================
@@ -28,9 +27,6 @@ export default function TabLayout() {
   const { darkMode } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminChecked, setAdminChecked] = useState(false);
-
   // Cores do tema — SUAVES (mesmo do profile)
   const theme = {
     bg: darkMode ? "#0f1f0f" : "#FFFFFF",
@@ -40,28 +36,6 @@ export default function TabLayout() {
     circleBg: "#3A6604",
     circleIcon: "#FFFFFF",
   };
-
-  /**
-   * Verifica se o user e admin (apenas uma vez ao iniciar)
-   * Usa /admin/check em vez de /users/me para evitar rate limit do Arcjet
-   */
-  useEffect(() => {
-    if (!isSignedIn || adminChecked) return;
-
-    const checkAdmin = async () => {
-      try {
-        const res = await api.get("/admin/check");
-        setIsAdmin(res.data?.isAdmin === true);
-      } catch (error) {
-        console.log("Admin check failed:", error);
-        setIsAdmin(false);
-      } finally {
-        setAdminChecked(true);
-      }
-    };
-
-    checkAdmin();
-  }, [isSignedIn, adminChecked]);
 
   /**
    * Botao customizado para o tab "create" (circulo verde flutuante)
@@ -93,7 +67,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false, // ← SEM NOMES NOS TABS, SO ICONES
+        tabBarShowLabel: false,
         tabBarActiveTintColor: theme.active,
         tabBarInactiveTintColor: theme.inactive,
         tabBarStyle: {
@@ -175,20 +149,11 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Tab 6: Admin — href: null esconde o tab para users normais */}
+      {/* Tab Admin — href: null esconde completamente do bottom bar */}
       <Tabs.Screen
         name="admin"
         options={{
-          // Se NAO for admin, href: null esconde o tab do bottom bar
-          // Se for admin, href: undefined (ou nao definir) mostra o tab normalmente
-          href: isAdmin ? undefined : null,
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "shield" : "shield-outline"}
-              size={size}
-              color={color}
-            />
-          ),
+          href: null,
         }}
       />
     </Tabs>

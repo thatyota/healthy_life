@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useRef, useCallback } from "react";
-import { View, Text, Image, TouchableOpacity, Animated, PanResponder, Alert } from "react-native";
+import React, { useRef, useCallback, useState } from "react";
+import { View, Text, Image, TouchableOpacity, Animated, PanResponder, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMarkAsRead, useDeleteNotification, useFollowUser } from "@/hooks/useNotifications";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useApiClient } from "@/utils/api";
 import type { Notification } from "@/hooks/useNotifications";
 
 // ============================================
@@ -22,6 +23,24 @@ interface NotificationItemProps {
 // COMPONENTE: NotificationItem
 // ============================================
 // Mostra UMA notificação no ecrã de notificações
+//
+// Tipos suportados:
+// - "follow": alguém começou a seguir-te
+// - "like": alguém gostou do teu post
+// - "comment": alguém comentou no teu post
+// - "delete_post": moderador removeu o teu post
+// - "delete_comment": moderador removeu o teu comentário
+//
+// Para "delete_post" e "delete_comment":
+// - Não mostra avatar do admin (mostra ícone de lixo)
+// - Mostra "Moderador" como remetente
+// - Mostra o motivo da remoção
+//
+// Quando clicas numa notificação de like/comment:
+// - Verifica se o post ainda existe antes de navegar
+// - Se não existir → mostra alerta "Esta publicação já não existe"
+// ============================================
+
 export default function NotificationItem({ notification, onDelete }: NotificationItemProps) {
   // ----------------------------------------
   // HOOKS
@@ -34,6 +53,8 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   const followUser = useFollowUser();
   // useCurrentUser = hook para buscar os dados do user logado
   const { data: currentUser } = useCurrentUser();
+  // useApiClient = client axios configurado com o token do Clerk
+  const api = useApiClient();
 
   // ----------------------------------------
   // ESTADO LOCAL
@@ -44,6 +65,15 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   // isFollowing = true se o user logado JÁ segue a pessoa da notificação
   // Verifica se o ID do remetente está na lista Following do user logado
   const isFollowing = currentUser?.Following?.includes(notification.from._id) || false;
+  // checkingPost = true enquanto verifica se o post existe
+  const [checkingPost, setCheckingPost] = useState(false);
+
+  // ----------------------------------------
+  // HELPERS
+  // ----------------------------------------
+  // isAdminDelete = true se for notificação de remoção (post ou comentário)
+  // Usado para esconder a foto do admin e mostrar "Moderador"
+  const isAdminDelete = notification.type === "delete_post" || notification.type === "delete_comment";
 
   // ----------------------------------------
   // PAN RESPONDER (efeito de swipe para apagar)
@@ -111,10 +141,36 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   }, [notification._id, deleteNotification, onDelete]);
 
   // ----------------------------------------
+  // FUNÇÃO: checkPostExists
+  // ----------------------------------------
+  // Verifica se o post ainda existe antes de navegar
+  // Usa o api client (axios) em vez de fetch para manter consistência
+  // Se não existir → mostra alerta
+  const checkPostExists = useCallback(async (postId: string): Promise<boolean> => {
+    try {
+      setCheckingPost(true);
+      // Faz um GET ao post para verificar se existe
+      const response = await api.get(`/posts/${postId}`);
+      setCheckingPost(false);
+      // Se o post existir → retorna true
+      return true;
+    } catch (error: any) {
+      setCheckingPost(false);
+      // Se der 404 → o post não existe
+      if (error?.response?.status === 404) {
+        return false;
+      }
+      // Outros erros → assume que não existe (segurança)
+      console.error("Erro ao verificar post:", error);
+      return false;
+    }
+  }, [api]);
+
+  // ----------------------------------------
   // FUNÇÃO: handlePress
   // ----------------------------------------
   // Quando clicamos na notificação → marca como lida e navega
-  const handlePress = useCallback(() => {
+  const handlePress = useCallback(async () => {
     // Se a notificação ainda não foi lida → marca como lida
     if (!notification.read) {
       markAsRead.mutate(notification._id);
@@ -124,12 +180,24 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
     if (notification.type === "follow") {
       router.push(`/(tabs)/profile/${notification.from.Username}` as any);
     }
-    // Se for notificação de like ou comment → vai para o post
+    // Se for notificação de like ou comment → verifica se o post existe antes de navegar
     else if (notification.type === "like" || notification.type === "comment") {
-      router.push(`/(tabs)/post/${notification.post}` as any);
+      // Se não tem post associado → mostra alerta
+      if (!notification.post) {
+        Alert.alert("Publicação indisponível", "Esta publicação já não existe.");
+        return;
+      }
+
+      // Verifica se o post ainda existe
+      const exists = await checkPostExists(notification.post);
+      if (exists) {
+        router.push(`/(tabs)/post/${notification.post}` as any);
+      } else {
+        Alert.alert("Publicação indisponível", "Esta publicação já não existe.");
+      }
     }
-    // Se for delete_post → não navega (só mostra a notificação)
-  }, [notification, markAsRead]);
+    // Se for delete_post ou delete_comment → não navega (só mostra a notificação)
+  }, [notification, markAsRead, checkPostExists]);
 
   // ----------------------------------------
   // FUNÇÃO: handleFollow
@@ -162,6 +230,8 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
         return "comentou na tua publicação";
       case "delete_post":
         return "removeu a tua publicação";
+      case "delete_comment":
+        return "removeu o teu comentário";
       default:
         return "interagiu contigo";
     }
@@ -180,6 +250,7 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
       case "comment":
         return "chatbubble";
       case "delete_post":
+      case "delete_comment":
         return "trash";
       default:
         return "notifications";
@@ -199,6 +270,7 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
       case "comment":
         return "#2196F3";  // Azul
       case "delete_post":
+      case "delete_comment":
         return "#C62828";  // Vermelho escuro
       default:
         return "#666";
@@ -209,15 +281,11 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   // RENDER
   // ----------------------------------------
   // senderName = nome a mostrar
-  // Se for delete_post → mostra "Moderador" (não o nome do admin)
+  // Se for delete_post ou delete_comment → mostra "Moderador" (não o nome do admin)
   // Senão → mostra FirstName + LastName
-  const senderName = notification.type === "delete_post"
+  const senderName = isAdminDelete
     ? "Moderador"
     : `${notification.from?.FirstName || ""} ${notification.from?.LastName || ""}`.trim();
-
-  // isDeletePost = true se for notificação de remoção de post
-  // Usado para esconder a foto do admin
-  const isDeletePost = notification.type === "delete_post";
 
   return (
     <View className="relative">
@@ -234,6 +302,7 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
       >
         <TouchableOpacity
           onPress={handlePress}
+          disabled={checkingPost}
           className={`flex-row items-center p-4 border-b border-gray-100 ${
             // Se não foi lida → fundo cinza claro
             !notification.read ? "bg-gray-50" : "bg-white"
@@ -242,8 +311,8 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
           {/* ============================================ */}
           {/* AVATAR / ÍCONE */}
           {/* ============================================ */}
-          {/* Se for delete_post → mostra ícone de lixo em vez da foto do admin */}
-          {isDeletePost ? (
+          {/* Se for delete_post ou delete_comment → mostra ícone de lixo em vez da foto do admin */}
+          {isAdminDelete ? (
             <View
               className="w-12 h-12 rounded-full justify-center items-center"
               style={{ backgroundColor: "#FFEBEE" }}  // Fundo vermelho claro
@@ -286,10 +355,17 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
               <Text> {getNotificationText()}</Text>
             </Text>
 
-            {/* Se for delete_post → mostra o motivo em vermelho */}
-            {isDeletePost && (notification as any).reason && (
+            {/* Se for delete_post ou delete_comment → mostra o motivo em vermelho */}
+            {isAdminDelete && notification.reason && (
               <Text className="text-xs text-red-600 mt-1 italic">
-                Motivo: {(notification as any).reason}
+                Motivo: {notification.reason}
+              </Text>
+            )}
+
+            {/* Se for delete_post ou delete_comment → mostra o conteúdo removido */}
+            {isAdminDelete && notification.postTitle && (
+              <Text className="text-xs text-gray-500 mt-1" numberOfLines={1}>
+                "{notification.postTitle}"
               </Text>
             )}
 
@@ -324,8 +400,13 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
             </TouchableOpacity>
           )}
 
+          {/* Indicador de loading enquanto verifica se o post existe */}
+          {checkingPost && (
+            <ActivityIndicator size="small" color="#3A6604" className="ml-2" />
+          )}
+
           {/* Bolinha azul (só aparece se não foi lida) */}
-          {!notification.read && (
+          {!notification.read && !checkingPost && (
             <View className="w-2 h-2 rounded-full bg-blue-500 ml-2" />
           )}
         </TouchableOpacity>

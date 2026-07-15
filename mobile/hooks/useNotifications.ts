@@ -15,11 +15,17 @@ export interface Notification {
     ProfilePicture: string; // Foto de perfil
   };
   to: string;             // ID do user que recebeu a notificação
-  type: "follow" | "like" | "comment" | "delete_post";  // Tipo da notificação
-  post?: string;          // ID do post (só para like, comment, delete_post)
+  // Tipos de notificação suportados:
+  // - "follow": alguém começou a seguir
+  // - "like": alguém gostou do teu post
+  // - "comment": alguém comentou no teu post
+  // - "delete_post": moderador removeu o teu post
+  // - "delete_comment": moderador removeu o teu comentário
+  type: "follow" | "like" | "comment" | "delete_post" | "delete_comment";
+  post?: string;          // ID do post (só para like, comment, delete_post, delete_comment)
   comment?: string;        // ID do comentário (só para comment)
-  reason?: string;        // Motivo da remoção (só para delete_post)
-  postTitle?: string;     // Título do post removido (só para delete_post)
+  reason?: string;        // Motivo da remoção (só para delete_post e delete_comment)
+  postTitle?: string;     // Título/conteúdo removido (só para delete_post e delete_comment)
   read: boolean;          // true = já foi lida, false = não lida
   createdAt: string;      // Data de criação
 }
