@@ -51,7 +51,6 @@ function formatTimeAgo(dateString: string): string {
  * - Conteúdo de texto e imagem
  * - Like com animação
  * - Comentários (navega para página)
- * - Guardar (placeholder)
  * - Admin delete: lixo vermelho para admins removerem posts de outros
  * 
  * O admin delete abre um modal pedindo o motivo da remoção.
@@ -261,7 +260,7 @@ export default function PostCard({ post, onDelete }: Props) {
           </TouchableOpacity>
         ) : null}
 
-        {/* Ações: like, comentar, guardar */}
+        {/* Ações: like, comentar */}
         <View className="flex-row items-center px-4 pb-4 gap-6">
           {/* Like com animação */}
           <Pressable onPress={handleLike} className="flex-row items-center gap-1.5">
@@ -288,11 +287,6 @@ export default function PostCard({ post, onDelete }: Props) {
             {commentCount > 0 && (
               <Text className="text-[#486623] text-[13px] font-semibold">{commentCount}</Text>
             )}
-          </TouchableOpacity>
-
-          {/* Guardar */}
-          <TouchableOpacity className="ml-auto">
-            <Ionicons name="bookmark-outline" size={20} color="#486623" />
           </TouchableOpacity>
         </View>
       </View>

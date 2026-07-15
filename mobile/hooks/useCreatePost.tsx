@@ -2,27 +2,33 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useApiClient } from "../utils/api";
+import { useAuth } from "@clerk/clerk-expo";
+
+// URL base da API
+const API_BASE_URL = "https://healthy-life-sable.vercel.app/api";
 
 /**
  * useCreatePost - Hook para criar posts com imagem
  * 
- * Funcionalidades:
- * - Escrever texto (content)
- * - Selecionar imagem da galeria (SEM crop, imagem inteira)
- * - Tirar foto com camera (SEM crop)
- * - Remover imagem selecionada
- * - Publicar post (texto + imagem opcional)
+ * IMPORTANTE: Usa fetch em vez de axios porque o axios tem problemas
+ * com FormData no React Native. O fetch lida corretamente com
+ * multipart/form-data.
  */
 export const useCreatePost = () => {
     const [content, setContent] = useState("");
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
-    const api = useApiClient();
+    const { getToken } = useAuth();
     const queryClient = useQueryClient();
 
-    // Mutation para criar post no backend
     const createPostMutation = useMutation({
         mutationFn: async (postData: {content: string, imageUri?: string}) => {
+            // Busca o token do Clerk
+            const token = await getToken();
+            if (!token) {
+                throw new Error("Nao autenticado");
+            }
+
+            // Cria o FormData
             const formData = new FormData();
 
             if (postData.content) formData.append("content", postData.content);
@@ -45,9 +51,24 @@ export const useCreatePost = () => {
                 } as any); 
             }
 
-            return api.post("/posts", formData, {
-                headers: { "Content-Type": "multipart/form-data"},
+            // Usa fetch em vez de axios para upload de ficheiros
+            // O fetch no React Native lida corretamente com FormData
+            const response = await fetch(`${API_BASE_URL}/posts`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    // NAO definir Content-Type — o fetch define automaticamente
+                },
+                body: formData,
             });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || data.message || `Erro ${response.status}`);
+            }
+
+            return data;
         },
         onSuccess: () => {
             setContent("");
@@ -56,11 +77,13 @@ export const useCreatePost = () => {
             Alert.alert("Sucesso","Post criado com sucesso!");
         },
         onError: (error: any) => {
-            Alert.alert("Erro", error?.response?.data?.error || "Erro ao criar post. Tenta novamente.");
+            console.error("=== ERRO AO CRIAR POST ===");
+            console.error("Erro:", error.message);
+            console.error("===========================");
+            Alert.alert("Erro", error.message || "Erro ao criar post. Tenta novamente.");
         },
     });
 
-    // Seleciona imagem da galeria ou camera - SEM CROP
     const handleImagePicker = async (useCamera: boolean = false) => {
         const permissionResult = useCamera
             ? await ImagePicker.requestCameraPermissionsAsync()
@@ -72,9 +95,8 @@ export const useCreatePost = () => {
             return;
         }
 
-        // SEM CROP - imagem inteira
         const pickerOptions = {
-            allowsEditing: false,   // ← SEM CROP! Imagem inteira
+            allowsEditing: false,
             quality: 0.8,
         };
 
@@ -88,7 +110,6 @@ export const useCreatePost = () => {
         if (!result.canceled) setSelectedImage(result.assets[0].uri);
     };
 
-    // Cria o post (valida primeiro)
     const createPost = () => {
         if (!content.trim() && !selectedImage) {
             Alert.alert("Post vazio", "Escreve algo ou adiciona uma imagem antes de publicar!");

@@ -11,8 +11,12 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { CurrentUser, useUpdateProfile } from "@/hooks/useCurrentUser";
+import { CurrentUser } from "@/hooks/useCurrentUser";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "@clerk/clerk-expo";
+
+// URL base da API
+const API_BASE_URL = "https://healthy-life-sable.vercel.app/api";
 
 // ============================================
 // PROPS do componente
@@ -27,6 +31,8 @@ interface Props {
 // ============================================
 // COMPONENTE: EditProfileModal
 // ============================================
+// Modal para editar o perfil do user (nome, bio, foto, banner, localizacao)
+// Usa fetch em vez de axios porque o axios tem problemas com FormData no React Native
 export default function EditProfileModal({ visible, onClose, onSuccess, user }: Props) {
   const [firstName, setFirstName] = useState(user.FirstName || "");
   const [lastName, setLastName] = useState(user.LastName || "");
@@ -34,7 +40,8 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
   const [location, setLocation] = useState(user.location || "");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [bannerImage, setBannerImage] = useState<string | null>(null);
-  const updateMutation = useUpdateProfile();
+  const [isLoading, setIsLoading] = useState(false);
+  const { getToken } = useAuth();
 
   const pickImage = async (type: "profile" | "banner") => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -53,7 +60,12 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
     }
   };
 
-  const handleSave = () => {
+  // ============================================
+  // FUNCAO: handleSave
+  // ============================================
+  // Usa fetch em vez de axios para upload de imagens
+  // O axios tem problemas com FormData no React Native
+  const handleSave = async () => {
     const hasTextChanges =
       firstName !== user.FirstName ||
       lastName !== user.LastName ||
@@ -67,57 +79,79 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
       return;
     }
 
-    const formData = new FormData();
+    setIsLoading(true);
 
-    if (firstName !== user.FirstName) formData.append("FirstName", firstName);
-    if (lastName !== user.LastName) formData.append("LastName", lastName);
-    if (bio !== user.bio) formData.append("bio", bio);
-    if (location !== user.location) formData.append("location", location);
+    try {
+      // Busca o token do Clerk
+      const token = await getToken();
+      if (!token) {
+        Alert.alert("Erro", "Nao esta autenticado.");
+        setIsLoading(false);
+        return;
+      }
 
-    if (profileImage) {
-      const filename = profileImage.split("/").pop() || "profile.jpg";
-      const match = /\.([a-zA-Z]+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : "image/jpeg";
+      // Cria o FormData
+      const formData = new FormData();
 
-      formData.append("ProfilePicture", {
-        uri: profileImage,
-        name: filename,
-        type: type,
-      } as any);
+      if (firstName !== user.FirstName) formData.append("FirstName", firstName);
+      if (lastName !== user.LastName) formData.append("LastName", lastName);
+      if (bio !== user.bio) formData.append("bio", bio);
+      if (location !== user.location) formData.append("location", location);
+
+      // Adiciona a foto de perfil se foi escolhida
+      if (profileImage) {
+        const filename = profileImage.split("/").pop() || "profile.jpg";
+        const match = /\.([a-zA-Z]+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : "image/jpeg";
+
+        formData.append("ProfilePicture", {
+          uri: profileImage,
+          name: filename,
+          type: type,
+        } as any);
+      }
+
+      // Adiciona a banner se foi escolhida
+      if (bannerImage) {
+        const filename = bannerImage.split("/").pop() || "banner.jpg";
+        const match = /\.([a-zA-Z]+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : "image/jpeg";
+
+        formData.append("bannerImage", {
+          uri: bannerImage,
+          name: filename,
+          type: type,
+        } as any);
+      }
+
+      // Faz o upload com fetch (mais fiavel para FormData no React Native)
+      const response = await fetch(`${API_BASE_URL}/users/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // NAO definir Content-Type — o fetch define automaticamente com boundary
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `Erro ${response.status}`);
+      }
+
+      Alert.alert("Sucesso", "Perfil atualizado!");
+      onSuccess?.();
+      onClose();
+
+    } catch (error: any) {
+      console.error("=== ERRO AO ATUALIZAR PERFIL ===");
+      console.error("Erro:", error.message);
+      console.error("==================================");
+      Alert.alert("Erro", `Nao foi possivel atualizar o perfil.\n\nDetalhes: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
-
-    if (bannerImage) {
-      const filename = bannerImage.split("/").pop() || "banner.jpg";
-      const match = /\.([a-zA-Z]+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : "image/jpeg";
-
-      formData.append("bannerImage", {
-        uri: bannerImage,
-        name: filename,
-        type: type,
-      } as any);
-    }
-
-    updateMutation.mutate(formData, {
-      onSuccess: () => {
-        Alert.alert("Sucesso", "Perfil atualizado!");
-        onSuccess?.();
-        onClose();
-      },
-      // onError AGORA mostra o erro real no console e no alert
-      onError: (error: any) => {
-        // Log detalhado do erro para debug
-        console.error("=== ERRO AO ATUALIZAR PERFIL ===");
-        console.error("Status:", error?.response?.status);
-        console.error("Data:", JSON.stringify(error?.response?.data));
-        console.error("Message:", error?.message);
-        console.error("==================================");
-
-        // Mostra o erro real ao user
-        const errorMessage = error?.response?.data?.error || error?.response?.data?.message || "Erro desconhecido";
-        Alert.alert("Erro", `Nao foi possivel atualizar o perfil.\n\nDetalhes: ${errorMessage}`);
-      },
-    });
   };
 
   return (
@@ -125,18 +159,20 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
       <SafeAreaView className="flex-1 bg-[#F1F8E9]">
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b border-[#C8E6C9]">
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} disabled={isLoading}>
             <Text className="text-[#486623] text-base">Cancelar</Text>
           </TouchableOpacity>
           <Text className="text-[#3A6604] font-bold text-lg">Editar Perfil</Text>
-          <TouchableOpacity onPress={handleSave}>
-            <Text className="text-[#65B307] font-bold text-base">Guardar</Text>
+          <TouchableOpacity onPress={handleSave} disabled={isLoading}>
+            <Text className="text-[#65B307] font-bold text-base">
+              {isLoading ? "A guardar..." : "Guardar"}
+            </Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
           {/* Banner */}
-          <TouchableOpacity onPress={() => pickImage("banner")} className="relative">
+          <TouchableOpacity onPress={() => pickImage("banner")} className="relative" disabled={isLoading}>
             {bannerImage || user.bannerImage ? (
               <Image
                 source={{ uri: bannerImage || user.bannerImage }}
@@ -155,7 +191,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
 
           {/* Avatar */}
           <View className="px-4 -mt-10">
-            <TouchableOpacity onPress={() => pickImage("profile")}>
+            <TouchableOpacity onPress={() => pickImage("profile")} disabled={isLoading}>
               {profileImage || user.ProfilePicture ? (
                 <Image
                   source={{ uri: profileImage || user.ProfilePicture }}
@@ -183,6 +219,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
                 onChangeText={setFirstName}
                 className="bg-white border border-[#C8E6C9] rounded-xl px-4 py-3 text-[#1a1a1a]"
                 placeholderTextColor="#8E8E8E"
+                editable={!isLoading}
               />
             </View>
 
@@ -193,6 +230,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
                 onChangeText={setLastName}
                 className="bg-white border border-[#C8E6C9] rounded-xl px-4 py-3 text-[#1a1a1a]"
                 placeholderTextColor="#8E8E8E"
+                editable={!isLoading}
               />
             </View>
 
@@ -207,6 +245,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
                 className="bg-white border border-[#C8E6C9] rounded-xl px-4 py-3 text-[#1a1a1a] h-24"
                 placeholderTextColor="#8E8E8E"
                 textAlignVertical="top"
+                editable={!isLoading}
               />
               <Text className="text-[#8E8E8E] text-xs text-right mt-1">{bio.length}/160</Text>
             </View>
@@ -218,6 +257,7 @@ export default function EditProfileModal({ visible, onClose, onSuccess, user }: 
                 onChangeText={setLocation}
                 className="bg-white border border-[#C8E6C9] rounded-xl px-4 py-3 text-[#1a1a1a]"
                 placeholderTextColor="#8E8E8E"
+                editable={!isLoading}
               />
             </View>
           </View>
