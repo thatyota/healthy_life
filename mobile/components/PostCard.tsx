@@ -49,13 +49,10 @@ function formatTimeAgo(dateString: string): string {
  * Funcionalidades:
  * - Mostra avatar, nome, username, tempo relativo
  * - Conteúdo de texto e imagem
- * - Like com animação
+ * - Like com animação (só anima ao DAR like, não ao tirar)
+ * - Contador de likes atualiza localmente para feedback imediato
  * - Comentários (navega para página)
  * - Admin delete: lixo vermelho para admins removerem posts de outros
- * 
- * O admin delete abre um modal pedindo o motivo da remoção.
- * Ao confirmar, envia POST /api/posts/:postId/admin-delete com { reason }.
- * O backend cria uma notificação tipo "delete_post" para o dono do post.
  * 
  * Props:
  *   post: Post — objeto do post (User, Content, Image, Likes, etc.)
@@ -75,17 +72,31 @@ export default function PostCard({ post, onDelete }: Props) {
   const [deleteReason, setDeleteReason] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Animação do coração
+  // Animação do coração — só anima ao DAR like
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const [likedLocally, setLikedLocally] = useState<boolean | null>(null);
+
+  // Estado local do like — override temporário do servidor
+  // null = usa o valor do servidor, true/false = usa o valor local
+  const [likedOverride, setLikedOverride] = useState<boolean | null>(null);
+
+  // Contador local de likes — para feedback imediato
+  const [localLikeCount, setLocalLikeCount] = useState(post.Likes?.length || 0);
 
   // ─── Dados do post ────────────────────────────────────────
   const postUser = post.User || post.user;
+
+  // isLikedFromServer = calculado a partir do post atual do servidor
   const isLikedFromServer = currentMongoId 
     ? post.Likes?.includes(currentMongoId) 
     : false;
-  const isLiked = likedLocally !== null ? likedLocally : isLikedFromServer;
-  const likeCount = post.Likes?.length || 0;
+
+  // isLiked = usa o override local se existir, senão usa o servidor
+  // Quando o user interage, o override tem prioridade
+  const isLiked = likedOverride !== null ? likedOverride : isLikedFromServer;
+
+  // likeCount = usa local se o user interagiu recentemente, senão usa servidor
+  const likeCount = likedOverride !== null ? localLikeCount : (post.Likes?.length || 0);
+
   const commentCount = post.comments?.length || 0;
 
   const displayName =
@@ -99,7 +110,6 @@ export default function PostCard({ post, onDelete }: Props) {
 
   /**
    * Busca o MongoDB _id do user logado e verifica se é admin.
-   * Compara post.User._id com currentMongoId para saber se é dono do post.
    */
   useEffect(() => {
     let mounted = true;
@@ -121,15 +131,23 @@ export default function PostCard({ post, onDelete }: Props) {
     return () => { mounted = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reseta o estado local do like quando o post muda (refetch)
+  /**
+   * Sincroniza o contador local quando o post MUDA (post diferente)
+   * NÃO reseta quando o post atualiza (refetch) — para não "piscar" o like
+   */
   useEffect(() => {
-    setLikedLocally(null);
-  }, [post._id, post.Likes?.length]);
+    setLikedOverride(null);
+    setLocalLikeCount(post.Likes?.length || 0);
+  }, [post._id]); // ← SÓ quando o ID do post muda, não quando Likes muda
 
   // ─── Helpers ─────────────────────────────────────────────
 
   const isOwner = currentMongoId ? postUser?._id === currentMongoId : false;
 
+  /**
+   * Anima o coração — scale de 1 → 1.3 → 1
+   * Só é chamada quando o user DÁ like
+   */
   const animateLike = () => {
     Animated.sequence([
       Animated.timing(scaleAnim, {
@@ -147,13 +165,44 @@ export default function PostCard({ post, onDelete }: Props) {
 
   // ─── Handlers ────────────────────────────────────────────
 
+  /**
+   * handleLike — Toggle like no post
+   * 
+   * Lógica:
+   * 1. Calcula o novo estado (inverte o atual)
+   * 2. Atualiza o estado local imediatamente (feedback instantâneo)
+   * 3. Atualiza o contador local (+1 se deu like, -1 se tirou)
+   * 4. Só anima se estiver a DAR like
+   * 5. Chama o backend — se falhar, reverte o estado local
+   * 6. Limpa o override após 3 segundos para sincronizar com servidor
+   */
   const handleLike = () => {
-    const newLikedState = !isLiked;
-    setLikedLocally(newLikedState);
-    animateLike();
+    const newLikedState = !isLiked;           // true = vai dar like, false = vai tirar
+
+    // Atualiza estado local imediatamente
+    setLikedOverride(newLikedState);
+    setLocalLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
+
+    // Só anima se estiver a DAR like
+    if (newLikedState) {
+      animateLike();
+    }
+
+    // Chama o backend
     likeMutation.mutate(post._id, {
-      onSuccess: () => { /* mantém estado — feed refetch atualiza */ },
-      onError: () => setLikedLocally(!newLikedState),
+      onSuccess: () => {
+        // Sucesso — limpa o override após 2 segundos para sincronizar com servidor
+        setTimeout(() => {
+          setLikedOverride(null);
+          setLocalLikeCount(post.Likes?.length || 0);
+        }, 2000);
+      },
+      onError: () => {
+        // Erro — reverte o estado local imediatamente
+        setLikedOverride(!newLikedState);
+        setLocalLikeCount(prev => newLikedState ? Math.max(0, prev - 1) : prev + 1);
+        Alert.alert("Erro", "Não foi possível atualizar o like.");
+      },
     });
   };
 
@@ -163,8 +212,6 @@ export default function PostCard({ post, onDelete }: Props) {
 
   /**
    * Confirma a remoção do post pelo admin.
-   * Envia POST /api/posts/:postId/admin-delete com { reason }.
-   * O backend verifica se é admin, apaga o post e cria notificação.
    */
   const confirmAdminDelete = async () => {
     if (!deleteReason.trim()) {
@@ -262,7 +309,7 @@ export default function PostCard({ post, onDelete }: Props) {
 
         {/* Ações: like, comentar */}
         <View className="flex-row items-center px-4 pb-4 gap-6">
-          {/* Like com animação */}
+          {/* Like com animação — só anima ao DAR like */}
           <Pressable onPress={handleLike} className="flex-row items-center gap-1.5">
             <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
               <Ionicons

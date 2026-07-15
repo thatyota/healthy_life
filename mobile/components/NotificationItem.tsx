@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useRef, useCallback, useState } from "react";
@@ -37,8 +38,11 @@ interface NotificationItemProps {
 // - Mostra o motivo da remoção
 //
 // Quando clicas numa notificação de like/comment:
-// - Verifica se o post ainda existe antes de navegar
-// - Se não existir → mostra alerta "Esta publicação já não existe"
+// - Verifica se o post ainda existe
+// - Se NÃO existir → mostra alerta "Esta publicação já não existe" e apaga a notificação
+//
+// Quando clicas numa notificação de follow:
+// - Navega para /profile/:username
 // ============================================
 
 export default function NotificationItem({ notification, onDelete }: NotificationItemProps) {
@@ -53,7 +57,7 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   const followUser = useFollowUser();
   // useCurrentUser = hook para buscar os dados do user logado
   const { data: currentUser } = useCurrentUser();
-  // useApiClient = client axios configurado com o token do Clerk
+  // useApiClient = client axios com token do Clerk
   const api = useApiClient();
 
   // ----------------------------------------
@@ -141,32 +145,6 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
   }, [notification._id, deleteNotification, onDelete]);
 
   // ----------------------------------------
-  // FUNÇÃO: checkPostExists
-  // ----------------------------------------
-  // Verifica se o post ainda existe antes de navegar
-  // Usa o api client (axios) em vez de fetch para manter consistência
-  // Se não existir → mostra alerta
-  const checkPostExists = useCallback(async (postId: string): Promise<boolean> => {
-    try {
-      setCheckingPost(true);
-      // Faz um GET ao post para verificar se existe
-      const response = await api.get(`/posts/${postId}`);
-      setCheckingPost(false);
-      // Se o post existir → retorna true
-      return true;
-    } catch (error: any) {
-      setCheckingPost(false);
-      // Se der 404 → o post não existe
-      if (error?.response?.status === 404) {
-        return false;
-      }
-      // Outros erros → assume que não existe (segurança)
-      console.error("Erro ao verificar post:", error);
-      return false;
-    }
-  }, [api]);
-
-  // ----------------------------------------
   // FUNÇÃO: handlePress
   // ----------------------------------------
   // Quando clicamos na notificação → marca como lida e navega
@@ -178,26 +156,42 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
 
     // Se for notificação de follow → vai para o perfil da pessoa
     if (notification.type === "follow") {
-      router.push(`/(tabs)/profile/${notification.from.Username}` as any);
-    }
-    // Se for notificação de like ou comment → verifica se o post existe antes de navegar
-    else if (notification.type === "like" || notification.type === "comment") {
-      // Se não tem post associado → mostra alerta
-      if (!notification.post) {
-        Alert.alert("Publicação indisponível", "Esta publicação já não existe.");
+      // Verifica se o Username existe antes de navegar
+      if (!notification.from?.Username) {
+        console.error("Username não encontrado na notificação:", notification);
+        Alert.alert("Erro", "Não foi possível abrir o perfil — dados em falta.");
         return;
       }
 
-      // Verifica se o post ainda existe
-      const exists = await checkPostExists(notification.post);
-      if (exists) {
-        router.push(`/(tabs)/post/${notification.post}` as any);
-      } else {
+      // Navega para o perfil do user
+      // Rota CORRETA: /profile/:username (fora da pasta tabs)
+      router.push(`/profile/${notification.from.Username}` as any);
+    }
+    // Se for notificação de like ou comment → verifica se o post existe
+    else if (notification.type === "like" || notification.type === "comment") {
+      // Se não tem post associado → mostra alerta e apaga
+      if (!notification.post) {
         Alert.alert("Publicação indisponível", "Esta publicação já não existe.");
+        handleDelete();
+        return;
+      }
+
+      try {
+        setCheckingPost(true);
+        // Verifica se o post ainda existe
+        await api.get(`/posts/${notification.post}`);
+        setCheckingPost(false);
+        // Post existe → navega
+        router.push(`/post/${notification.post}` as any);
+      } catch (error: any) {
+        setCheckingPost(false);
+        // Post não existe (404) ou outro erro → mostra alerta e apaga notificação
+        Alert.alert("Publicação indisponível", "Esta publicação já não existe.");
+        handleDelete();
       }
     }
     // Se for delete_post ou delete_comment → não navega (só mostra a notificação)
-  }, [notification, markAsRead, checkPostExists]);
+  }, [notification, markAsRead, api, handleDelete]);
 
   // ----------------------------------------
   // FUNÇÃO: handleFollow
@@ -356,16 +350,16 @@ export default function NotificationItem({ notification, onDelete }: Notificatio
             </Text>
 
             {/* Se for delete_post ou delete_comment → mostra o motivo em vermelho */}
-            {isAdminDelete && notification.reason && (
+            {isAdminDelete && (notification as any).reason && (
               <Text className="text-xs text-red-600 mt-1 italic">
-                Motivo: {notification.reason}
+                Motivo: {(notification as any).reason}
               </Text>
             )}
 
             {/* Se for delete_post ou delete_comment → mostra o conteúdo removido */}
-            {isAdminDelete && notification.postTitle && (
+            {isAdminDelete && (notification as any).postTitle && (
               <Text className="text-xs text-gray-500 mt-1" numberOfLines={1}>
-                "{notification.postTitle}"
+                "{(notification as any).postTitle}"
               </Text>
             )}
 

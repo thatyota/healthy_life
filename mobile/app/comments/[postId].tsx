@@ -9,15 +9,19 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
+import { useApiClient } from "@/utils/api";
 import { usePosts, useLikePost } from "@/hooks/usePosts";
 import { useComments, useCreateComment } from "@/hooks/useComments";
 import CommentItem from "@/components/CommentItem";
 
+/**
+ * Formata a data relativa (ex: "agora", "5m", "2h", "3d")
+ */
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -32,15 +36,48 @@ function formatTimeAgo(dateString: string): string {
   return `${Math.floor(days / 7)}sem`;
 }
 
+/**
+ * CommentsPage — Página de detalhe de um post com comentários
+ * 
+ * Funcionalidades:
+ * - Mostra o post com avatar, nome, conteúdo e imagem
+ * - Like com coração vermelho se o user logado deu like
+ * - Lista de comentários com CommentItem
+ * - Input para adicionar novo comentário
+ * 
+ * Correções:
+ * - Busca o MongoDB _id do user logado para comparar com Likes (array de ObjectIds)
+ * - Remove botão de partilhar (não implementado)
+ */
 export default function CommentsPage() {
   const { postId } = useLocalSearchParams();
   const router = useRouter();
   const { userId } = useAuth();
+  const api = useApiClient();
   const { data: posts } = usePosts();
   const likeMutation = useLikePost();
   const { data: comments, isLoading: commentsLoading } = useComments(postId as string);
   const createCommentMutation = useCreateComment();
   const [commentText, setCommentText] = useState("");
+  const [currentMongoId, setCurrentMongoId] = useState<string | null>(null);
+
+  /**
+   * Busca o MongoDB _id do user logado.
+   * Necessário porque post.Likes guarda ObjectIds do MongoDB,
+   * não clerkIds. Sem isto, o like nunca aparece como "liked".
+   */
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await api.get("/users/me");
+        const mongoId = response?.data?.user?._id;
+        if (mongoId) setCurrentMongoId(mongoId);
+      } catch (error) {
+        console.error("Erro ao buscar user:", error);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   const post = posts?.find((p) => p._id === postId);
 
@@ -53,7 +90,10 @@ export default function CommentsPage() {
   }
 
   const postUser = post.User || post.user;
-  const isLiked = post.Likes?.includes(userId || "");
+
+  // isLiked = true se o currentMongoId está no array Likes do post
+  // Compara ObjectId do MongoDB (não clerkId)
+  const isLiked = currentMongoId ? post.Likes?.includes(currentMongoId) : false;
   const likeCount = post.Likes?.length || 0;
   const commentCount = post.comments?.length || 0;
 
@@ -61,18 +101,26 @@ export default function CommentsPage() {
     `${postUser?.FirstName || ""} ${postUser?.LastName || ""}`.trim() ||
     postUser?.Username;
 
+  /**
+   * Toggle like no post.
+   * Chama o backend e invalida a cache do usePosts para atualizar o feed.
+   */
   const handleLike = () => {
     likeMutation.mutate(post._id);
   };
 
+  /**
+   * Envia um novo comentário.
+   * Valida se não está vazio e limpa o input após sucesso.
+   */
   const handleSubmitComment = () => {
     if (!commentText.trim()) {
       console.log("⚠️ Comentário vazio, ignorando");
       return;
     }
-    
+
     console.log("🚀 Enviando comentário:", commentText.trim());
-    
+
     createCommentMutation.mutate(
       { postId: postId as string, content: commentText.trim() },
       {
@@ -119,22 +167,49 @@ export default function CommentsPage() {
               <Text className="text-[#3A6604] font-bold text-[14px]">{displayName}</Text>
               <Text className="text-[#486623] text-[12px]">@{postUser?.Username}</Text>
             </View>
-            <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1">
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={20}
-                color={isLiked ? "#ED4956" : "#486623"}
-              />
-              <Text className={`text-[12px] ${isLiked ? "text-[#ED4956]" : "text-[#486623]"}`}>
-                {likeCount}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           <Text className="text-[#1a1a1a] text-[14px]" numberOfLines={2}>
             {post.Content}
           </Text>
           <Text className="text-[#8E8E8E] text-[12px] mt-1">{timeAgo}</Text>
+
+          {/* Imagem do post */}
+          {post.Image ? (
+            <Image
+              source={{ uri: post.Image }}
+              className="w-full aspect-[4/3] rounded-xl mt-2"
+              resizeMode="cover"
+            />
+          ) : null}
+
+          {/* Ações: like e comentar (sem partilhar) */}
+          <View className="flex-row items-center mt-3 gap-5">
+            {/* Like */}
+            <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1">
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#ED4956" : "#486623"}
+              />
+              <Text className={`text-[13px] font-semibold ${isLiked ? "text-[#ED4956]" : "text-[#486623]"}`}>
+                {likeCount}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Comentar */}
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="chatbubble-outline" size={20} color="#486623" />
+              <Text className="text-[#486623] text-[13px] font-semibold">{commentCount}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Título da secção de comentários */}
+        <View className="px-4 py-2 bg-[#F1F8E9]">
+          <Text className="text-[#3A6604] font-bold text-[15px]">
+            Comentários ({commentCount})
+          </Text>
         </View>
 
         {/* Comments List */}
