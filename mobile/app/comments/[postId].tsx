@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -41,13 +42,14 @@ function formatTimeAgo(dateString: string): string {
  * 
  * Funcionalidades:
  * - Mostra o post com avatar, nome, conteúdo e imagem
- * - Like com coração vermelho se o user logado deu like
+ * - Like com coração vermelho e animação (igual ao PostCard)
  * - Lista de comentários com CommentItem
  * - Input para adicionar novo comentário
  * 
  * Correções:
- * - Busca o MongoDB _id do user logado para comparar com Likes (array de ObjectIds)
- * - Remove botão de partilhar (não implementado)
+ * - Busca o MongoDB _id do user logado para comparar com Likes
+ * - Animação do coração ao dar like (igual ao PostCard)
+ * - Remove botão de partilhar
  */
 export default function CommentsPage() {
   const { postId } = useLocalSearchParams();
@@ -61,10 +63,14 @@ export default function CommentsPage() {
   const [commentText, setCommentText] = useState("");
   const [currentMongoId, setCurrentMongoId] = useState<string | null>(null);
 
+  // Animação do coração — igual ao PostCard
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [likedOverride, setLikedOverride] = useState<boolean | null>(null);
+  const [localLikeCount, setLocalLikeCount] = useState(0);
+
   /**
    * Busca o MongoDB _id do user logado.
-   * Necessário porque post.Likes guarda ObjectIds do MongoDB,
-   * não clerkIds. Sem isto, o like nunca aparece como "liked".
+   * Necessário porque post.Likes guarda ObjectIds do MongoDB.
    */
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -81,6 +87,14 @@ export default function CommentsPage() {
 
   const post = posts?.find((p) => p._id === postId);
 
+  // Sincroniza localLikeCount quando o post muda
+  useEffect(() => {
+    if (post) {
+      setLocalLikeCount(post.Likes?.length || 0);
+      setLikedOverride(null);
+    }
+  }, [post?._id]);
+
   if (!post) {
     return (
       <SafeAreaView className="flex-1 bg-[#F1F8E9] justify-center items-center">
@@ -92,9 +106,9 @@ export default function CommentsPage() {
   const postUser = post.User || post.user;
 
   // isLiked = true se o currentMongoId está no array Likes do post
-  // Compara ObjectId do MongoDB (não clerkId)
-  const isLiked = currentMongoId ? post.Likes?.includes(currentMongoId) : false;
-  const likeCount = post.Likes?.length || 0;
+  const isLikedFromServer = currentMongoId ? post.Likes?.includes(currentMongoId) : false;
+  const isLiked = likedOverride !== null ? likedOverride : isLikedFromServer;
+  const likeCount = likedOverride !== null ? localLikeCount : (post.Likes?.length || 0);
   const commentCount = post.comments?.length || 0;
 
   const displayName =
@@ -102,16 +116,53 @@ export default function CommentsPage() {
     postUser?.Username;
 
   /**
+   * Anima o coração — scale de 1 → 1.3 → 1
+   * Igual ao PostCard
+   */
+  const animateLike = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.3,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  /**
    * Toggle like no post.
-   * Chama o backend e invalida a cache do usePosts para atualizar o feed.
+   * Atualiza estado local imediatamente e anima ao dar like.
    */
   const handleLike = () => {
-    likeMutation.mutate(post._id);
+    const newLikedState = !isLiked;
+    setLikedOverride(newLikedState);
+    setLocalLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
+
+    if (newLikedState) {
+      animateLike();
+    }
+
+    likeMutation.mutate(post._id, {
+      onSuccess: () => {
+        setTimeout(() => {
+          setLikedOverride(null);
+          setLocalLikeCount(post.Likes?.length || 0);
+        }, 2000);
+      },
+      onError: () => {
+        setLikedOverride(!newLikedState);
+        setLocalLikeCount(prev => newLikedState ? Math.max(0, prev - 1) : prev + 1);
+      },
+    });
   };
 
   /**
    * Envia um novo comentário.
-   * Valida se não está vazio e limpa o input após sucesso.
    */
   const handleSubmitComment = () => {
     if (!commentText.trim()) {
@@ -185,13 +236,15 @@ export default function CommentsPage() {
 
           {/* Ações: like e comentar (sem partilhar) */}
           <View className="flex-row items-center mt-3 gap-5">
-            {/* Like */}
+            {/* Like com animação — igual ao PostCard */}
             <TouchableOpacity onPress={handleLike} className="flex-row items-center gap-1">
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={22}
-                color={isLiked ? "#ED4956" : "#486623"}
-              />
+              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                <Ionicons
+                  name={isLiked ? "heart" : "heart-outline"}
+                  size={22}
+                  color={isLiked ? "#ED4956" : "#486623"}
+                />
+              </Animated.View>
               <Text className={`text-[13px] font-semibold ${isLiked ? "text-[#ED4956]" : "text-[#486623]"}`}>
                 {likeCount}
               </Text>
